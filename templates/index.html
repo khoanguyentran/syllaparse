@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Syllabus Parser - Course Calendar Generator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .logo {
+            font-size: 2.5rem;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 1.1rem;
+            margin-bottom: 30px;
+        }
+
+        .upload-area {
+            border: 3px dashed #ddd;
+            border-radius: 15px;
+            padding: 40px 20px;
+            margin: 20px 0;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: #fafafa;
+        }
+
+        .upload-area:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+
+        .upload-area.dragover {
+            border-color: #667eea;
+            background: #e8f2ff;
+            transform: scale(1.02);
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+
+        .upload-text {
+            font-size: 1.2rem;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .upload-hint {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 10px;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .btn-secondary:hover {
+            box-shadow: 0 10px 20px rgba(108, 117, 125, 0.3);
+        }
+
+        .progress {
+            width: 100%;
+            height: 6px;
+            background: #e9ecef;
+            border-radius: 3px;
+            margin: 20px 0;
+            overflow: hidden;
+            display: none;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 15px;
+            display: none;
+        }
+
+        .course-info {
+            text-align: left;
+            margin: 20px 0;
+        }
+
+        .course-info h3 {
+            color: #333;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 5px;
+        }
+
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .info-label {
+            font-weight: 600;
+            color: #555;
+        }
+
+        .info-value {
+            color: #333;
+            text-align: right;
+            max-width: 60%;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            border: 1px solid #f5c6cb;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            border: 1px solid #c3e6cb;
+        }
+
+        .loading {
+            display: none;
+            margin: 20px 0;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .footer {
+            margin-top: 30px;
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+                margin: 10px;
+            }
+
+            .logo {
+                font-size: 2rem;
+            }
+
+            .upload-area {
+                padding: 30px 15px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="logo">📚 Syllabus Parser</div>
+        <div class="subtitle">Upload your course syllabus PDF and generate a calendar file for Google Calendar</div>
+
+        <div class="upload-area" id="uploadArea">
+            <div class="upload-icon">📄</div>
+            <div class="upload-text">Drop your PDF syllabus here</div>
+            <div class="upload-hint">or click to browse files</div>
+            <input type="file" id="fileInput" class="file-input" accept=".pdf">
+        </div>
+
+        <button class="btn" id="uploadBtn" style="display: none;">Upload PDF</button>
+
+        <div class="progress" id="progress">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <div>Processing your syllabus...</div>
+        </div>
+
+        <div class="result" id="result"></div>
+
+        <div class="footer">
+            <p>Supported formats: PDF | Max file size: 16MB</p>
+            <p>Generated ICS files can be imported into Google Calendar, Outlook, and other calendar applications</p>
+        </div>
+    </div>
+
+    <script>
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const progress = document.getElementById('progress');
+        const progressBar = document.getElementById('progressBar');
+        const loading = document.getElementById('loading');
+        const result = document.getElementById('result');
+
+        // Drag and drop functionality
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        uploadArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        function handleFile(file) {
+            if (!file.type.includes('pdf')) {
+                showError('Please select a PDF file.');
+                return;
+            }
+
+            if (file.size > 16 * 1024 * 1024) {
+                showError('File size must be less than 16MB.');
+                return;
+            }
+
+            uploadBtn.style.display = 'inline-block';
+            uploadBtn.onclick = () => uploadFile(file);
+        }
+
+        function uploadFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            // Show loading state
+            loading.style.display = 'block';
+            uploadBtn.style.display = 'none';
+            result.style.display = 'none';
+
+            // Simulate progress
+            let progressValue = 0;
+            const progressInterval = setInterval(() => {
+                progressValue += Math.random() * 15;
+                if (progressValue > 90) progressValue = 90;
+                progressBar.style.width = progressValue + '%';
+            }, 200);
+
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+                .then(response => response.json())
+                .then(data => {
+                    clearInterval(progressInterval);
+                    progressBar.style.width = '100%';
+
+                    setTimeout(() => {
+                        loading.style.display = 'none';
+                        progress.style.display = 'none';
+
+                        if (data.success) {
+                            showSuccess(data);
+                        } else {
+                            showError(data.error);
+                        }
+                    }, 500);
+                })
+                .catch(error => {
+                    clearInterval(progressInterval);
+                    loading.style.display = 'none';
+                    progress.style.display = 'none';
+                    showError('An error occurred while processing the file.');
+                    console.error('Error:', error);
+                });
+        }
+
+        function showSuccess(data) {
+            const courseInfo = data.course_info;
+            // Store course info globally for download function
+            window.currentCourseInfo = courseInfo;
+            result.innerHTML = `
+                <div class="success">
+                    <h3>✅ Syllabus processed successfully!</h3>
+                    <p>Your course schedule has been extracted and an ICS file has been generated.</p>
+                </div>
+                
+                <div class="course-info">
+                    <h3>📋 Course Information</h3>
+                    <div class="info-item">
+                        <span class="info-label">Course Code:</span>
+                        <span class="info-value">${courseInfo.course_code || 'Not found'}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Course Name:</span>
+                        <span class="info-value">${courseInfo.course_name || 'Not found'}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Instructor:</span>
+                        <span class="info-value">${courseInfo.instructor || 'Not found'}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Location:</span>
+                        <span class="info-value">${courseInfo.location || 'Not found'}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Start Date:</span>
+                        <span class="info-value">${courseInfo.start_date || 'Not found'}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">End Date:</span>
+                        <span class="info-value">${courseInfo.end_date || 'Not found'}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Meeting Times:</span>
+                        <span class="info-value">${courseInfo.meeting_times.length > 0 ?
+                    courseInfo.meeting_times.map(m => `${m.day} ${m.start_time}-${m.end_time}`).join(', ') :
+                    'Not found'}</span>
+                    </div>
+                </div>
+                
+                <div style="text-align: center; margin-top: 20px;">
+                    <a href="#" class="btn" onclick="downloadICS('${data.ics_filename}')">
+                        📅 Download ICS File
+                    </a>
+                    <a href="#" class="btn btn-secondary" onclick="addToGoogleCalendar()">
+                        🗓️ Add to Google Calendar
+                    </a>
+                </div>
+                
+                <div style="margin-top: 20px; padding: 15px; background: #e3f2fd; border-radius: 10px;">
+                    <h4>📱 How to use:</h4>
+                    <ol style="text-align: left; margin-left: 20px;">
+                        <li><strong>Download ICS:</strong> Click the download button above to get your calendar file</li>
+                        <li><strong>Google Calendar:</strong> Go to Settings → Import & Export → Select the downloaded file</li>
+                        <li><strong>Other Calendars:</strong> Most calendar apps support ICS file imports</li>
+                    </ol>
+                </div>
+            `;
+            result.style.display = 'block';
+            uploadBtn.style.display = 'inline-block';
+        }
+
+        function showError(message) {
+            result.innerHTML = `
+                <div class="error">
+                    <h3>❌ Error</h3>
+                    <p>${message}</p>
+                </div>
+            `;
+            result.style.display = 'block';
+            uploadBtn.style.display = 'inline-block';
+        }
+
+        function downloadICS(filename) {
+            // Get course info from the displayed result
+            const courseInfo = window.currentCourseInfo;
+            if (!courseInfo) {
+                alert('No course information available. Please upload a syllabus first.');
+                return;
+            }
+
+            // Use fetch to get the ICS file
+            fetch('/generate_ics', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ course_info: courseInfo })
+            })
+                .then(response => {
+                    if (response.ok) {
+                        return response.blob();
+                    }
+                    throw new Error('Failed to generate ICS file');
+                })
+                .then(blob => {
+                    // Create download link
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error downloading ICS file: ' + error.message);
+                });
+        }
+
+        function addToGoogleCalendar() {
+            // Open Google Calendar in a new tab
+            window.open('https://calendar.google.com/', '_blank');
+        }
+    </script>
+</body>
+
+</html>
