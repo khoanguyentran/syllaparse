@@ -336,60 +336,6 @@ export default function GoogleSignIn() {
                     </div>
                 </div>
             </div>
-
-            {/* Calendar Events */}
-            {calendarConnected && calendarEvents.length > 0 && (
-                <div className="mb-6">
-                    <h4 className="font-medium text-gray-900 mb-3">Upcoming Events (Next 7 Days)</h4>
-                    <div className="space-y-2 max-h-48 overflow-y-auto">
-                        {calendarEvents.slice(0, 5).map((event) => (
-                            <div key={event.id} className="flex items-center space-x-3 p-2 bg-gray-50 rounded-lg">
-                                <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-gray-900 truncate">
-                                        {event.summary}
-                                    </p>
-                                    <p className="text-xs text-gray-600">
-                                        {event.start.dateTime
-                                            ? new Date(event.start.dateTime).toLocaleDateString()
-                                            : event.start.date
-                                        }
-                                    </p>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                    {calendarEvents.length > 5 && (
-                        <p className="text-xs text-gray-500 mt-2 text-center">
-                            +{calendarEvents.length - 5} more events
-                        </p>
-                    )}
-                </div>
-            )}
-
-            {/* Quick Actions */}
-            <div className="border-t border-gray-200 pt-4">
-                <h4 className="font-medium text-gray-900 mb-3">Quick Actions</h4>
-                <div className="grid grid-cols-2 gap-3">
-                    <button
-                        onClick={() => {
-                            const token = localStorage.getItem('google_access_token')
-                            if (token) loadCalendarEvents(token)
-                        }}
-                        className="flex items-center justify-center px-3 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-                    >
-                        <Calendar className="w-4 h-4 mr-2" />
-                        Refresh Events
-                    </button>
-                    <button
-                        onClick={() => window.open('https://calendar.google.com', '_blank')}
-                        className="flex items-center justify-center px-3 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-                    >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Open Calendar
-                    </button>
-                </div>
-            </div>
         </div>
     )
 }
