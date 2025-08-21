@@ -1,5 +1,5 @@
 # Database package initialization
-from .database import get_db, engine, Base
+from .db import get_db, engine, Base
 from .models import User, File, Summary, AssignmentExam
 
 __all__ = [
