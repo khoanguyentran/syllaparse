@@ -7,7 +7,7 @@ import os
 # Add the backend directory to Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.database import get_db, engine
+from backend.app.database.db import get_db, engine
 from backend.app.database.models import Base
 
 # Create database tables
