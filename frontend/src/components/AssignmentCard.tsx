@@ -2,21 +2,27 @@
 
 import { Assignment } from '@/types'
 import { formatDate, formatTime, getDueStatus, getPriorityColor, getTypeIcon, getTypeLabel } from '@/utils/helpers'
-import { Calendar, Clock, MapPin, BookOpen, AlertCircle } from 'lucide-react'
+import { Calendar, Clock, MapPin, BookOpen, AlertCircle, Download, CheckCircle } from 'lucide-react'
 import clsx from 'clsx'
 
 interface AssignmentCardProps {
   assignment: Assignment
   onEdit?: (assignment: Assignment) => void
   onDelete?: (id: string) => void
+  onExportToCalendar?: (assignment: Assignment) => void
   showActions?: boolean
+  isSelected?: boolean
+  onClick?: () => void
 }
 
 export default function AssignmentCard({ 
   assignment, 
   onEdit, 
   onDelete, 
-  showActions = false 
+  onExportToCalendar,
+  showActions = false,
+  isSelected = false,
+  onClick
 }: AssignmentCardProps) {
   const dueStatus = getDueStatus(assignment.dueDate)
 
@@ -43,10 +49,16 @@ export default function AssignmentCard({
   }
 
   return (
-    <div className={clsx(
-      "bg-white rounded-lg border transition-all duration-200 hover:shadow-md",
-      dueStatus.status === 'overdue' ? 'border-red-200' : 'border-gray-200'
-    )}>
+    <div 
+      className={clsx(
+        "bg-white border-l-4 transition-all duration-200 hover:shadow-md cursor-pointer",
+        dueStatus.status === 'overdue' ? 'border-l-red-500' : 
+        dueStatus.status === 'due-soon' ? 'border-l-orange-500' : 'border-l-green-500',
+        isSelected && "ring-2 ring-blue-500 ring-opacity-50 bg-blue-50",
+        onClick && "hover:bg-gray-50"
+      )}
+      onClick={onClick}
+    >
       <div className="p-4">
         {/* Header */}
         <div className="flex items-start justify-between mb-3">
@@ -54,10 +66,15 @@ export default function AssignmentCard({
             <div className="text-2xl">
               {getTypeIcon(assignment.type)}
             </div>
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 line-clamp-2">
-                {assignment.title}
-              </h3>
+            <div className="flex-1">
+              <div className="flex items-center space-x-2">
+                <h3 className="text-lg font-semibold text-gray-900 line-clamp-2">
+                  {assignment.title}
+                </h3>
+                {isSelected && (
+                  <CheckCircle className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                )}
+              </div>
               {assignment.course && (
                 <p className="text-sm text-gray-600">{assignment.course}</p>
               )}
@@ -66,18 +83,38 @@ export default function AssignmentCard({
           
           {showActions && (
             <div className="flex items-center space-x-2">
+              {onExportToCalendar && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onExportToCalendar(assignment)
+                  }}
+                  className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                  title="Export to Google Calendar"
+                >
+                  <Download className="w-4 h-4" />
+                </button>
+              )}
               {onEdit && (
                 <button
-                  onClick={() => onEdit(assignment)}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onEdit(assignment)
+                  }}
                   className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                  title="Edit assignment"
                 >
                   <BookOpen className="w-4 h-4" />
                 </button>
               )}
               {onDelete && (
                 <button
-                  onClick={() => onDelete(assignment.id)}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onDelete(assignment.id)
+                  }}
                   className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  title="Delete assignment"
                 >
                   <AlertCircle className="w-4 h-4" />
                 </button>
@@ -98,7 +135,7 @@ export default function AssignmentCard({
           <div className="flex items-center space-x-2">
             <Calendar className="w-4 h-4 text-gray-400" />
             <span className="text-sm text-gray-600">
-              {formatDate(assignment.dueDate)}
+              Due: {formatDate(assignment.dueDate)}
             </span>
           </div>
           
