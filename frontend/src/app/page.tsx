@@ -10,6 +10,7 @@ import SummaryStats from '@/components/SummaryStats'
 import AssignmentFilters from '@/components/AssignmentFilters'
 import AssignmentCard from '@/components/AssignmentCard'
 import SyllabusViewer from '@/components/SyllabusViewer'
+import GoogleSignIn from '@/components/GoogleSignIn'
 
 export default function HomePage() {
   const [assignments, setAssignments] = useState<Assignment[]>([])
@@ -24,7 +25,7 @@ export default function HomePage() {
   const parseSyllabus = async (file: File) => {
     setIsUploading(true)
     setUploadProgress(0)
-    
+
     // Simulate upload progress
     const progressInterval = setInterval(() => {
       setUploadProgress(prev => {
@@ -38,10 +39,10 @@ export default function HomePage() {
 
     // Simulate API call delay
     await new Promise(resolve => setTimeout(resolve, 2000))
-    
+
     clearInterval(progressInterval)
     setUploadProgress(100)
-    
+
     // Mock parsed data - focused on assignments and exams with dates
     const mockAssignments: Assignment[] = [
       {
@@ -108,7 +109,7 @@ export default function HomePage() {
         location: 'Room 105, Technology Center'
       }
     ]
-    
+
     // Mock syllabus content
     const mockSyllabusContent = `
 # Computer Science 101 - Fall 2024
@@ -140,7 +141,7 @@ This course introduces fundamental concepts in computer science including algori
 - Programming Assignment 3: December 10, 2024
 - Weekly Quiz 5: December 8, 2024
     `
-    
+
     setAssignments(mockAssignments)
     setSyllabusContent(mockSyllabusContent)
     setSelectedAssignments(new Set()) // Reset selections
@@ -176,7 +177,7 @@ This course introduces fundamental concepts in computer science including algori
 
   const handleExportSelected = () => {
     if (selectedAssignments.size === 0) return
-    
+
     const selectedAssignmentObjects = assignments.filter(a => selectedAssignments.has(a.id))
     const icsContent = generateICSContent(selectedAssignmentObjects)
     const blob = new Blob([icsContent], { type: 'text/calendar' })
@@ -222,6 +223,7 @@ This course introduces fundamental concepts in computer science including algori
               <span className="text-sm text-gray-600">
                 {format(new Date(), 'EEEE, MMMM d, yyyy')}
               </span>
+              <GoogleSignIn />
             </div>
           </div>
         </div>
@@ -276,8 +278,8 @@ This course introduces fundamental concepts in computer science including algori
                     </div>
                   </div>
                   <div className="p-6 min-h-[700px]">
-                    <SyllabusViewer 
-                      content={syllabusContent} 
+                    <SyllabusViewer
+                      content={syllabusContent}
                       pdfFile={selectedFile}
                     />
                   </div>
@@ -287,7 +289,7 @@ This course introduces fundamental concepts in computer science including algori
               {/* Right Column - Assignments */}
               <div className="space-y-6">
                 {/* Filters */}
-                <AssignmentFilters 
+                <AssignmentFilters
                   assignments={assignments}
                   onFiltersChange={handleFiltersChange}
                 />
@@ -307,7 +309,7 @@ This course introduces fundamental concepts in computer science including algori
                           {selectedAssignments.size} of {filteredAssignments.length} selected
                         </span>
                       </div>
-                      
+
                       {selectedAssignments.size > 0 && (
                         <button
                           onClick={handleExportSelected}
@@ -336,7 +338,7 @@ This course introduces fundamental concepts in computer science including algori
                       )}
                     </div>
                   </div>
-                  
+
                   {filteredAssignments.length > 0 ? (
                     <div className="divide-y divide-gray-200">
                       {filteredAssignments.map((assignment) => (
@@ -358,7 +360,7 @@ This course introduces fundamental concepts in computer science including algori
                         No assignments found
                       </h3>
                       <p className="text-gray-600">
-                        {filters.searchQuery 
+                        {filters.searchQuery
                           ? `No assignments match "${filters.searchQuery}"`
                           : 'Try adjusting your filters or upload a new syllabus'
                         }
@@ -412,14 +414,14 @@ function generateICSContent(assignments: Assignment[]): string {
   const events = assignments.map(assignment => {
     const startDate = new Date(assignment.dueDate)
     const endDate = new Date(startDate.getTime() + 60 * 60 * 1000) // 1 hour duration
-    
+
     const formatDate = (date: Date) => {
       return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
     }
-    
+
     const description = assignment.description || ''
     const location = assignment.location || ''
-    
+
     return `BEGIN:VEVENT
 UID:${assignment.id}@syllaparse.com
 DTSTART:${formatDate(startDate)}
@@ -431,7 +433,7 @@ PRIORITY:${assignment.priority === 'high' ? '1' : assignment.priority === 'mediu
 STATUS:NEEDS-ACTION
 END:VEVENT`
   }).join('\n')
-  
+
   return `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Syllaparse//Calendar Export//EN
