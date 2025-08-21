@@ -1,14 +1,8 @@
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-import sys
-import os
-
-# Add the backend directory to Python path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from backend.app.database.db import get_db, engine
-from backend.app.database.models import Base
+from app.database.db import get_db, engine
+from app.database.models import Base
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
