@@ -1,13 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  typescript: {
-    ignoreBuildErrors: false,
-  },
-  eslint: {
-    ignoreDuringBuilds: false,
-  },
+  output: "export",
+  trailingSlash: true,
   images: {
-    domains: ["localhost"],
+    unoptimized: true,
   },
   env: {
     NEXT_PUBLIC_API_URL:
