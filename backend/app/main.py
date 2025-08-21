@@ -33,6 +33,7 @@ async def startup_event():
     """Create database tables on startup if database is available"""
     try:
         # Try to create database tables
+        logger.info("Starting database initialization...")
         engine = get_engine()
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables created successfully")
@@ -55,8 +56,22 @@ async def hello():
 @app.get("/api/db-test")
 async def test_database(db: Session = Depends(get_db)):
     try:
+        logger.info("Testing database connection...")
         # Simple database test
         result = db.execute("SELECT 1").scalar()
+        logger.info(f"Database test successful: {result}")
         return {"database": "connected", "test_query": result}
     except Exception as e:
+        logger.error(f"Database test failed: {e}")
         return {"database": "error", "message": str(e)}
+
+@app.get("/api/debug-env")
+async def debug_environment():
+    """Debug endpoint to check environment variables"""
+    import os
+    database_url = os.getenv("DATABASE_URL")
+    return {
+        "DATABASE_URL_set": bool(database_url),
+        "DATABASE_URL_length": len(database_url) if database_url else 0,
+        "DATABASE_URL_preview": database_url[:20] + "..." if database_url and len(database_url) > 20 else database_url
+    }

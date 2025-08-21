@@ -13,7 +13,6 @@ class User(Base):
     name = Column(String(255), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    is_active = Column(Boolean, default=True)
     role = Column(String(20), default='user')
     
     # Relationships
