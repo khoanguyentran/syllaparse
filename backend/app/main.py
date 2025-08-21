@@ -1,12 +1,15 @@
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from app.database.db import get_db, engine
+from app.database.db import get_db, get_engine
 from app.database.models import Base
+import logging
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
+# Create FastAPI app
 app = FastAPI(
     title="Syllaparse API",
     description="AI-powered syllabus parsing and management API",
@@ -24,6 +27,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.on_event("startup")
+async def startup_event():
+    """Create database tables on startup if database is available"""
+    try:
+        # Try to create database tables
+        engine = get_engine()
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database tables created successfully")
+    except Exception as e:
+        logger.warning(f"Could not create database tables: {e}")
+        logger.info("This is normal if database is not set up yet")
 
 @app.get("/")
 async def root():

@@ -7,23 +7,37 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Database configuration
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", 
-    "postgresql://syllaparse_user:syllaparse_password@localhost:5432/syllaparse"
-)
-
-# Create engine
-engine = create_engine(DATABASE_URL)
-
-# Create SessionLocal class
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+def get_database_url():
+    """Get database URL from environment variable"""
+    return os.getenv(
+        "DATABASE_URL", 
+    )
 
 # Create Base class
 Base = declarative_base()
 
+# Lazy initialization of engine and session
+_engine = None
+_SessionLocal = None
+
+def get_engine():
+    """Get or create database engine"""
+    global _engine
+    if _engine is None:
+        database_url = get_database_url()
+        _engine = create_engine(database_url)
+    return _engine
+
+def get_session_local():
+    """Get or create session local"""
+    global _SessionLocal
+    if _SessionLocal is None:
+        _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=get_engine())
+    return _SessionLocal
+
 # Dependency to get database session
 def get_db():
-    db = SessionLocal()
+    db = get_session_local()()
     try:
         yield db
     finally:
