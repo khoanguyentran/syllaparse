@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.database.db import get_db, get_engine
 from app.database.models import Base, User, File, Summary, AssignmentExam, Lectures
 from app.routes import files, auth, users, summaries, assignments_exams, lectures
-from app.ai import routes as ai_routes
+from app.processing import routes as processing
 import logging
 
 # Set up logging
@@ -37,7 +37,7 @@ app.include_router(users.router)
 app.include_router(summaries.router)
 app.include_router(assignments_exams.router)
 app.include_router(lectures.router)
-app.include_router(ai_routes.router)
+app.include_router(processing.router)
 
 @app.on_event("startup")
 async def startup_event():

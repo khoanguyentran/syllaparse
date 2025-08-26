@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Calendar, BookOpen, Download, FileText, CheckCircle } from 'lucide-react'
 import { format } from 'date-fns'
+import { useSearchParams, useRouter } from 'next/navigation'
 import FileUpload from '@/components/FileUpload'
 import GoogleSignIn from '@/components/GoogleSignIn'
 import SummaryStats from '@/components/SummaryStats'
@@ -58,6 +59,9 @@ const mockSyllabusContent = `
 `
 
 export default function Home() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
@@ -67,6 +71,31 @@ export default function Home() {
   const [selectedAssignments, setSelectedAssignments] = useState<Set<string>>(new Set())
   const [authError, setAuthError] = useState<string | null>(null)
   const [googleId, setGoogleId] = useState<string | null>(null)
+  const [hasUploadedFile, setHasUploadedFile] = useState(false)
+  const [isRestoring, setIsRestoring] = useState(true)
+
+  // Check URL params on mount to restore state
+  useEffect(() => {
+    const view = searchParams.get('view')
+    if (view === 'stats') {
+      // Restore mock data for now (in real app, this would fetch from backend)
+      setAssignments(mockAssignments)
+      setSyllabusContent(mockSyllabusContent)
+      setHasUploadedFile(true)
+    }
+    setIsRestoring(false)
+  }, [searchParams])
+
+  // Update URL when view changes
+  const updateURL = (view: 'upload' | 'stats') => {
+    const params = new URLSearchParams(searchParams.toString())
+    if (view === 'stats') {
+      params.set('view', 'stats')
+    } else {
+      params.delete('view')
+    }
+    router.replace(`?${params.toString()}`, { scroll: false })
+  }
 
   // Handle Google ID changes from GoogleSignIn component
   const handleGoogleIdChange = (newGoogleId: string | null) => {
@@ -116,6 +145,8 @@ export default function Home() {
       setAssignments(mockAssignments)
       setSyllabusContent(mockSyllabusContent)
       setSelectedAssignments(new Set()) // Reset selections
+      setHasUploadedFile(true) // Mark that a file has been uploaded
+      updateURL('stats') // Redirect to stats page after upload
       
     } catch (error) {
       console.error('Error uploading file:', error)
@@ -194,8 +225,20 @@ export default function Home() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Loading State */}
+        {isRestoring && (
+          <div className="text-center py-12">
+            <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4 animate-spin">
+              <BookOpen className="w-8 h-8 text-gray-400" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              Loading...
+            </h3>
+          </div>
+        )}
+
         {/* File Upload Section */}
-        {assignments.length === 0 && (
+        {!isRestoring && !hasUploadedFile && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
             {authError && (
               <div className="mb-4 p-3 bg-red-50 rounded-lg border border-red-200">
@@ -229,7 +272,7 @@ export default function Home() {
         )}
 
         {/* Two Column Layout */}
-        {assignments.length > 0 && (
+        {!isRestoring && hasUploadedFile && (
           <div className="space-y-6">
             {/* Summary Stats */}
             <SummaryStats assignments={assignments} />
@@ -357,6 +400,8 @@ export default function Home() {
                   setFilters({})
                   setSyllabusContent('')
                   setSelectedAssignments(new Set())
+                  setHasUploadedFile(false) // Reset uploaded file state
+                  updateURL('upload') // Redirect to upload page
                 }}
                 className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
@@ -368,7 +413,7 @@ export default function Home() {
         )}
 
         {/* Empty State */}
-        {assignments.length === 0 && !isUploading && !selectedFile && (
+        {!isRestoring && !hasUploadedFile && !isUploading && !selectedFile && (
           <div className="text-center py-12">
             <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
               <BookOpen className="w-8 h-8 text-gray-400" />
