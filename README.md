@@ -15,29 +15,56 @@ syllaparse/
 
 ## 🚀 Quick Start
 
-1. **Run setup**
+### Prerequisites
 
-   ```bash
-   ./setup-dev.sh
-   ```
+- Node.js 18+ and npm
+- Python 3.8+
+- Google Cloud account with Cloud Storage enabled
 
-2. **Start backend**
+### 1. Clone and Setup
 
-   ```bash
-   cd backend
-   source venv/bin/activate
-   uvicorn app.main:app --reload
-   ```
+```bash
+git clone <your-repo-url>
+cd syllaparse
+./setup-dev.sh
+```
 
-3. **Start frontend**
+### 2. Configure Google Cloud Credentials
 
-   ```bash
-   cd frontend
-   npm run dev
-   ```
+**For individual developers:**
 
-4. **View API Documentation**
-   - API docs: http://localhost:8000/docs
+```bash
+./setup-credentials.sh
+```
+
+Then follow the instructions to:
+
+- Download your Google Cloud service account key
+- Place it in the `credentials/` folder
+- Update your `.env` file with your project details
+
+**For team members working on the same Google Cloud project:**
+See [TEAM_SETUP.md](./TEAM_SETUP.md) for shared project setup.
+
+### 3. Start Backend
+
+```bash
+cd backend
+source venv/bin/activate
+uvicorn app.main:app --reload
+```
+
+### 4. Start Frontend
+
+```bash
+cd frontend
+npm run dev
+```
+
+### 5. View Application
+
+- Frontend: http://localhost:3000
+- API docs: http://localhost:8000/docs
 
 ## 🛠️ Tech Stack
 

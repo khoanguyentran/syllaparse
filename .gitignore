@@ -34,8 +34,4 @@ Thumbs.db
 *.json
 service-account-key.json
 .env.local
-
-# Google Cloud credentials
-*.json
-service-account-key.json
-.env.local
+credentials/
