@@ -9,9 +9,10 @@ load_dotenv()
 # Database configuration
 def get_database_url():
     """Get database URL from environment variable"""
-    return os.getenv(
-        "DATABASE_URL", 
-    )
+    database_url = os.getenv("DATABASE_URL")
+    if not database_url:
+        raise ValueError("DATABASE_URL environment variable is not set")
+    return database_url
 
 # Create Base class
 Base = declarative_base()

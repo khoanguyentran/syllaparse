@@ -29,3 +29,13 @@ uploads/
 # OS
 .DS_Store
 Thumbs.db
+
+# Google Cloud credentials
+*.json
+service-account-key.json
+.env.local
+
+# Google Cloud credentials
+*.json
+service-account-key.json
+.env.local

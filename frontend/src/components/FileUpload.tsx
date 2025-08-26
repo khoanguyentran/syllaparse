@@ -12,6 +12,7 @@ interface FileUploadProps {
   uploadProgress: number
   acceptedTypes?: string[]
   maxSize?: number // in MB
+  disabled?: boolean // New prop for authentication state
 }
 
 export default function FileUpload({
@@ -21,7 +22,8 @@ export default function FileUpload({
   isUploading,
   uploadProgress,
   acceptedTypes = ['.pdf'],
-  maxSize = 10
+  maxSize = 10,
+  disabled = false
 }: FileUploadProps) {
   const [isDragOver, setIsDragOver] = useState(false)
   const [error, setError] = useState<string | null>(null)

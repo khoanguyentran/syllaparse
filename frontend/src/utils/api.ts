@@ -4,45 +4,92 @@ export const api = {
   // Health check
   health: () => fetch(`${API_BASE_URL}/health`),
   
-  // Files
-  uploadFile: (file: File, userId: number) => {
+  // Files - Upload via Next.js API route (which uploads to GCS and calls Python backend)
+  uploadFile: (file: File, googleId: string) => {
     const formData = new FormData()
     formData.append('file', file)
-    formData.append('user_id', userId.toString())
+    formData.append('googleId', googleId)
     
-    return fetch(`${API_BASE_URL}/api/files/upload`, {
+    return fetch('/api/upload', {
       method: 'POST',
       body: formData
     })
   },
   
   getFiles: (userId: number) => 
-    fetch(`${API_BASE_URL}/api/files?user_id=${userId}`),
+    fetch(`${API_BASE_URL}/files?user_id=${userId}`),
   
   getFile: (fileId: number) => 
-    fetch(`${API_BASE_URL}/api/files/${fileId}`),
+    fetch(`${API_BASE_URL}/files/${fileId}`),
   
-  // Summaries
-  getSummary: (fileId: number) => 
-    fetch(`${API_BASE_URL}/api/summaries/${fileId}`),
+  deleteFile: (fileId: number) => 
+    fetch(`${API_BASE_URL}/files/${fileId}`, {
+      method: 'DELETE'
+    }),
   
-  // Assignments/Exams
-  getAssignmentsExams: (fileId: number) => 
-    fetch(`${API_BASE_URL}/api/assignments-exams?file_id=${fileId}`),
+  // Authentication
+  googleLogin: (userInfo: { id: string; email: string; name: string; picture?: string }) =>
+    fetch('/api/auth/google', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ googleUser: userInfo })
+    }),
   
-  // Users
-  createUser: (userData: { email: string; name: string; password: string }) =>
-    fetch(`${API_BASE_URL}/api/users`, {
+  getUser: (userId: number) => 
+    fetch(`${API_BASE_URL}/users/${userId}`),
+  
+  getUserByGoogleId: (googleId: string) => 
+    fetch(`${API_BASE_URL}/users/google/${googleId}`),
+  
+  // Summaries - Read Only (for frontend display)
+  getSummary: (summaryId: number) => 
+    fetch(`${API_BASE_URL}/summaries/${summaryId}`),
+  
+  getSummaryByFile: (fileId: number) => 
+    fetch(`${API_BASE_URL}/summaries/file/${fileId}`),
+  
+  // Assignments/Exams - Read Only (for frontend display)
+  getAssignmentsExams: (fileId?: number, type?: string) => {
+    const params = new URLSearchParams()
+    if (fileId) params.append('file_id', fileId.toString())
+    if (type) params.append('type', type)
+    
+    return fetch(`${API_BASE_URL}/assignments-exams?${params.toString()}`)
+  },
+  
+  getAssignmentExam: (assignmentId: number) => 
+    fetch(`${API_BASE_URL}/assignments-exams/${assignmentId}`),
+  
+  getAssignmentsExamsByFile: (fileId: number) => 
+    fetch(`${API_BASE_URL}/assignments-exams/file/${fileId}`),
+  
+  getLectures: (fileId?: number, day?: number) => {
+    const params = new URLSearchParams()
+    if (fileId) params.append('file_id', fileId.toString())
+    if (day !== undefined) params.append('day', day.toString())
+    
+    return fetch(`${API_BASE_URL}/lectures?${params.toString()}`)
+  },
+  
+  getLecture: (lectureId: number) => 
+    fetch(`${API_BASE_URL}/lectures/${lectureId}`),
+  
+  getLecturesByFile: (fileId: number) => 
+    fetch(`${API_BASE_URL}/lectures/file/${fileId}`),
+  
+  // Users - Essential operations for frontend
+  createUser: (userData: { google_id: string; email: string; name: string }) =>
+    fetch(`${API_BASE_URL}/users`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(userData)
     }),
   
-  login: (credentials: { email: string; password: string }) =>
-    fetch(`${API_BASE_URL}/api/auth/login`, {
-      method: 'POST',
+  updateUser: (userId: number, userData: { name?: string; email?: string }) =>
+    fetch(`${API_BASE_URL}/users/${userId}`, {
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(credentials)
+      body: JSON.stringify(userData)
     })
 }
 

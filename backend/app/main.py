@@ -2,7 +2,8 @@ from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from app.database.db import get_db, get_engine
-from app.database.models import Base
+from app.database.models import Base, User, File, Summary, AssignmentExam, Lectures
+from app.routes import files, auth, users, summaries, assignments_exams, lectures
 import logging
 
 # Set up logging
@@ -21,12 +22,20 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
-        "https://syllaparse-frontend.onrender.com"
+        "https://syllaparse-frontend.onrender.com/"
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include routers
+app.include_router(files.router)
+app.include_router(auth.router)
+app.include_router(users.router)
+app.include_router(summaries.router)
+app.include_router(assignments_exams.router)
+app.include_router(lectures.router)
 
 @app.on_event("startup")
 async def startup_event():
@@ -48,30 +57,3 @@ async def root():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
-
-@app.get("/api/hello")
-async def hello():
-    return {"message": "Hello from the API!"}
-
-@app.get("/api/db-test")
-async def test_database(db: Session = Depends(get_db)):
-    try:
-        logger.info("Testing database connection...")
-        # Simple database test
-        result = db.execute("SELECT 1").scalar()
-        logger.info(f"Database test successful: {result}")
-        return {"database": "connected", "test_query": result}
-    except Exception as e:
-        logger.error(f"Database test failed: {e}")
-        return {"database": "error", "message": str(e)}
-
-@app.get("/api/debug-env")
-async def debug_environment():
-    """Debug endpoint to check environment variables"""
-    import os
-    database_url = os.getenv("DATABASE_URL")
-    return {
-        "DATABASE_URL_set": bool(database_url),
-        "DATABASE_URL_length": len(database_url) if database_url else 0,
-        "DATABASE_URL_preview": database_url[:20] + "..." if database_url and len(database_url) > 20 else database_url
-    }
