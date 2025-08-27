@@ -1,17 +1,11 @@
 'use client'
 
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useState, useEffect } from 'react'
 import { useGoogleLogin } from '@react-oauth/google'
 import Image from 'next/image'
 import { FcGoogle } from 'react-icons/fc'
 import { api } from '@/utils/api'
-
-interface GoogleUser {
-  id: string
-  name: string
-  email: string
-  picture: string
-}
+import { saveSession, loadSession, clearSession, GoogleUser } from '@/utils/session'
 
 interface GoogleSignInProps {
   onGoogleIdChange: (googleId: string | null) => void
@@ -25,9 +19,57 @@ export default function GoogleSignIn({ onGoogleIdChange }: GoogleSignInProps) {
   const [imageError, setImageError] = useState(false)
   const [useProxy, setUseProxy] = useState(false)
   const [imageLoading, setImageLoading] = useState(false)
+  const [isInitialized, setIsInitialized] = useState(false)
+
+  // Silently restore session on component mount
+  useEffect(() => {
+    const restoreSession = async () => {
+      const session = loadSession()
+      
+      if (session) {
+        console.log('Silently restoring session for user:', session.user.name)
+        
+        // Set the user state immediately without showing loading
+        setUser(session.user)
+        setGoogleId(session.googleId)
+        setIsSignedIn(true)
+        
+        // Notify parent component
+        onGoogleIdChange(session.googleId)
+        
+        // Validate session with backend in the background (silently)
+        try {
+          const authResponse = await api.googleLogin(session.user)
+          if (!authResponse.ok) {
+            console.warn('Session validation failed, clearing session')
+            clearSession()
+            setUser(null)
+            setGoogleId(null)
+            setIsSignedIn(false)
+            onGoogleIdChange(null)
+          }
+        } catch (err) {
+          console.warn('Session validation error, clearing session:', err)
+          clearSession()
+          setUser(null)
+          setGoogleId(null)
+          setIsSignedIn(false)
+          onGoogleIdChange(null)
+        }
+      }
+      
+      // Mark as initialized (this happens regardless of session state)
+      setIsInitialized(true)
+    }
+
+    restoreSession()
+  }, [onGoogleIdChange])
 
   const handleTokenResponse = useCallback(async (response: any) => {
     try {
+      // Store the access token for calendar operations
+      localStorage.setItem('google_access_token', response.access_token)
+      
       // Get user info from Google
       const userInfo = await fetch(
         `https://www.googleapis.com/oauth2/v3/userinfo?access_token=${response.access_token}`
@@ -39,7 +81,7 @@ export default function GoogleSignIn({ onGoogleIdChange }: GoogleSignInProps) {
 
       const userData = await userInfo.json()
       
-      const googleUser = {
+      const googleUser: GoogleUser = {
         id: userData.sub, 
         name: userData.name,
         email: userData.email,
@@ -61,6 +103,9 @@ export default function GoogleSignIn({ onGoogleIdChange }: GoogleSignInProps) {
       setGoogleId(googleUser.id)
       setIsSignedIn(true)
       setError(null)
+      
+      // Save session to localStorage
+      saveSession(googleUser, googleUser.id)
       
       // Notify parent component of Google ID change
       onGoogleIdChange(googleUser.id)
@@ -90,7 +135,7 @@ export default function GoogleSignIn({ onGoogleIdChange }: GoogleSignInProps) {
   const login = useGoogleLogin({
     onSuccess: handleTokenResponse,
     onError: () => setError('Login Failed'),
-    scope: 'openid https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/calendar.readonly',
+    scope: 'openid https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events',
   })
 
   const checkCalendarAccess = async (accessToken: string) => {
@@ -122,6 +167,12 @@ export default function GoogleSignIn({ onGoogleIdChange }: GoogleSignInProps) {
     setImageError(false)
     setUseProxy(false)
     setImageLoading(false)
+    
+    // Clear session from localStorage
+    clearSession()
+    
+    // Clear access token
+    localStorage.removeItem('google_access_token')
     
     // Notify parent component that Google ID is cleared
     onGoogleIdChange(null)
@@ -175,6 +226,11 @@ export default function GoogleSignIn({ onGoogleIdChange }: GoogleSignInProps) {
     }
     
     return user.picture
+  }
+
+  // Don't render anything until we've checked for existing sessions
+  if (!isInitialized) {
+    return null // This prevents any flash of content
   }
 
   return (

@@ -90,6 +90,7 @@ class Lectures(Base):
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
     location = Column(String(255), nullable=True)
+    type = Column(String(255), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     # Relationships
@@ -100,4 +101,5 @@ class Lectures(Base):
         CheckConstraint(day >= 0, name='day_min'),
         CheckConstraint(day <= 6, name='day_max'),
         CheckConstraint(start_date <= end_date, name='valid_date_range'),
+        CheckConstraint(type.in_(['lab', 'lecture', 'discussion']), name='valid_lecture_type'),
     )

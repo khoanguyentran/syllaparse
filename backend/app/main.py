@@ -1,3 +1,7 @@
+# Load environment variables from .env file first
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -6,6 +10,7 @@ from app.database.models import Base, User, File, Summary, AssignmentExam, Lectu
 from app.routes import files, auth, users, summaries, assignments_exams, lectures
 from app.processing import routes as processing
 import logging
+import os
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -51,6 +56,8 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Could not create database tables: {e}")
         logger.info("This is normal if database is not set up yet")
+    
+
 
 @app.get("/")
 async def root():

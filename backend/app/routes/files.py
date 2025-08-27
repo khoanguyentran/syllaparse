@@ -123,17 +123,28 @@ async def get_file(
 
 @router.get("/")
 async def list_user_files(
-    user_id: int,
+    user_id: int = None,
+    google_id: str = None,
     db: Session = Depends(get_db)
 ):
     """
-    List all files for a specific user
+    List all files for a specific user (by user_id or google_id)
     """
     try:
-        # Check if user exists
-        user = db.query(User).filter(User.id == user_id).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+        if not user_id and not google_id:
+            raise HTTPException(status_code=400, detail="Either user_id or google_id must be provided")
+        
+        if google_id:
+            # Find user by Google ID
+            user = db.query(User).filter(User.google_id == google_id).first()
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+            user_id = user.id
+        else:
+            # Check if user exists by user_id
+            user = db.query(User).filter(User.id == user_id).first()
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
         
         # Get user's files from database
         db_files = db.query(FileModel).filter(FileModel.user_id == user_id).all()

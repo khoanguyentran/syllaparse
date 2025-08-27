@@ -94,7 +94,25 @@ export const api = {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(userData)
-    })
+    }),
+  
+  // Processing endpoints
+  parseSyllabus: (fileId: number) => 
+    fetch(`${API_BASE_URL}/processing/parse/${fileId}`, {
+      method: 'POST'
+    }),
+  
+  getFileSummary: (fileId: number) => 
+    fetch(`${API_BASE_URL}/processing/summary/${fileId}`),
+  
+  getExamDates: (fileId: number) => 
+    fetch(`${API_BASE_URL}/processing/exams/${fileId}`),
+  
+  getAssignmentDates: (fileId: number) => 
+    fetch(`${API_BASE_URL}/processing/assignments/${fileId}`),
+  
+  getLectureSchedule: (fileId: number) => 
+    fetch(`${API_BASE_URL}/processing/lectures/${fileId}`),
 }
 
 export default api

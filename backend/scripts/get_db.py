@@ -4,8 +4,13 @@ Check database contents and show all data
 """
 
 import os
+import sys
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
+
+# Add the parent directory to the Python path so we can import from app
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
 from app.database.models import User, File, Summary, AssignmentExam, Lectures
 
 def check_database():

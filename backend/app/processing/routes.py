@@ -1,25 +1,484 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
-from app.database.db import get_db
-from app.database.models import File
+from sqlalchemy.sql import func
+from app.database.db import get_db, get_session_local
+from app.database.models import File, Summary, AssignmentExam, Lectures
 from .parser import Parser
+from typing import List, Dict, Any
+from datetime import time, date
+import asyncio
+import json
+import os
+import redis
 
 router = APIRouter(prefix="/processing", tags=["processing"])
 
+# Redis client (lazy init)
+_redis_client = None
+
+def get_redis_client() -> redis.Redis:
+    global _redis_client
+    if _redis_client is not None:
+        return _redis_client
+    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    _redis_client = redis.from_url(redis_url, decode_responses=True)
+    return _redis_client
+
+def _status_key(file_id: int) -> str:
+    return f"parse_status:{file_id}"
+
+def _cache_key_all(file_id: int) -> str:
+    return f"syllabus_all:{file_id}"
+
 @router.post("/parse/{file_id}")
-async def parse_syllabus(file_id: int, db: Session = Depends(get_db)):
-    """Parse a syllabus file using GPT"""
+async def parse_syllabus(file_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """Runs parsing and reports status via Redis."""
+    # Validate file exists
+    file = db.query(File).filter(File.id == file_id).first()
+    if not file:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    # Initialize status
+    r = get_redis_client()
+    r.hset(_status_key(file_id), mapping={
+        "status": "queued",
+        "progress": "0",
+        "message": "Queued for parsing"
+    })
+    r.expire(_status_key(file_id), 3600)
+
+    # Launch background task
+    background_tasks.add_task(_run_parse_and_store, file_id)
+
+    return {"status": "processing", "file_id": file_id}
+
+def _run_parse_and_store(file_id: int) -> None:
+    """Parses file, stores to DB, and updates Redis status/caches."""
+    r = get_redis_client()
+    def set_status(status: str, progress: int, message: str):
+        try:
+            r.hset(_status_key(file_id), mapping={
+                "status": status,
+                "progress": str(progress),
+                "message": message
+            })
+            r.expire(_status_key(file_id), 3600)
+        except Exception:
+            pass
+
+    set_status("started", 5, "Starting parse")
+    SessionLocal = get_session_local()
+    db = SessionLocal()
+    try:
+        file = db.query(File).filter(File.id == file_id).first()
+        if not file:
+            set_status("failed", 100, "File not found")
+            return
+
+        parser = Parser()
+        set_status("extracting", 15, "Extracting text and calling AI")
+        result = asyncio.run(parser.parse_syllabus(file.file_path))
+        if not result.get("success"):
+            set_status("failed", 100, f"Parsing failed: {result.get('error', 'Unknown error')}")
+            return
+        parsed_data = result.get("parsed", {})
+
+        set_status("saving", 60, "Saving parsed data")
+
+        # Summary
+        if parsed_data.get("course_name") or parsed_data.get("instructor"):
+            summary_text = f"Course: {parsed_data.get('course_name', 'N/A')}\nInstructor: {parsed_data.get('instructor', 'N/A')}"
+            existing_summary = db.query(Summary).filter(Summary.file_id == file_id).first()
+            if existing_summary:
+                existing_summary.summary = summary_text
+                existing_summary.updated_at = func.now()
+            else:
+                db.add(Summary(file_id=file_id, summary=summary_text, confidence=85))
+
+        # Lectures
+        if parsed_data.get("lectures"):
+            db.query(Lectures).filter(Lectures.file_id == file_id).delete()
+            for lecture_data in parsed_data["lectures"]:
+                try:
+                    day = lecture_data.get("day")
+                    if isinstance(day, str):
+                        day_map = {"monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3, "friday": 4, "saturday": 5, "sunday": 6}
+                        day = day_map.get(day.lower(), 0)
+                    start_time = _parse_time(lecture_data.get("start_time", "09:00"))
+                    end_time = _parse_time(lecture_data.get("end_time", "10:30"))
+                    start_date = _parse_date(lecture_data.get("start_date", "2024-01-15"))
+                    end_date = _parse_date(lecture_data.get("end_date", "2024-05-15"))
+                    db.add(Lectures(
+                        file_id=file_id,
+                        day=day,
+                        start_time=start_time,
+                        end_time=end_time,
+                        start_date=start_date,
+                        end_date=end_date,
+                        location=lecture_data.get("location", ""),
+                        type=lecture_data.get("type", "lecture")
+                    ))
+                except Exception:
+                    continue
+
+        # Assignments
+        if parsed_data.get("assignments"):
+            db.query(AssignmentExam).filter(AssignmentExam.file_id == file_id, AssignmentExam.type == 'assignment').delete()
+            for assignment_data in parsed_data["assignments"]:
+                try:
+                    due_date = _parse_date(assignment_data.get("parsed_date", "2024-01-15"))
+                    db.add(AssignmentExam(
+                        file_id=file_id,
+                        parsed_date=due_date,
+                        description=assignment_data.get("description", ""),
+                        type="assignment",
+                        confidence=assignment_data.get("confidence", 70)
+                    ))
+                except Exception:
+                    continue
+
+        # Exams
+        if parsed_data.get("exams"):
+            db.query(AssignmentExam).filter(AssignmentExam.file_id == file_id, AssignmentExam.type == 'exam').delete()
+            for exam_data in parsed_data["exams"]:
+                try:
+                    exam_date = _parse_date(exam_data.get("parsed_date", "2024-01-15"))
+                    db.add(AssignmentExam(
+                        file_id=file_id,
+                        parsed_date=exam_date,
+                        description=exam_data.get("description", ""),
+                        type="exam",
+                        confidence=exam_data.get("confidence", 70)
+                    ))
+                except Exception:
+                    continue
+
+        db.commit()
+
+        # Invalidate cache
+        try:
+            r.delete(_cache_key_all(file_id))
+        except Exception:
+            pass
+
+        set_status("completed", 100, "Parsing completed")
+    except Exception as e:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        set_status("failed", 100, f"Error: {str(e)}")
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
+
+@router.get("/parse/{file_id}/status")
+async def get_parsing_status(file_id: int):
+    """Return current parsing status for a file from Redis."""
+    r = get_redis_client()
+    data = r.hgetall(_status_key(file_id)) or {}
+    if not data:
+        return {"status": "unknown", "message": "No status found"}
+    return data
+
+@router.get("/summary/{file_id}")
+async def get_file_summary(file_id: int, db: Session = Depends(get_db)):
+    """Get summary for a specific file"""
     try:
         # Get file from database
         file = db.query(File).filter(File.id == file_id).first()
         if not file:
             raise HTTPException(status_code=404, detail="File not found")
         
-        # Parse with GPT
-        parser = Parser()
-        result = await parser.parse_syllabus(file.filepath)
+        # Get summary from database
+        summary = db.query(Summary).filter(Summary.file_id == file_id).first()
+        if not summary:
+            raise HTTPException(status_code=404, detail="Summary not found for this file")
         
-        return result
+        return {
+            "file_id": file_id,
+            "filename": file.filename,
+            "summary": summary.summary,
+            "confidence": summary.confidence,
+            "created_at": summary.created_at
+        }
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/exams/{file_id}")
+async def get_exam_dates(file_id: int, db: Session = Depends(get_db)):
+    """Get exam dates for a specific file"""
+    try:
+        # Get file from database
+        file = db.query(File).filter(File.id == file_id).first()
+        if not file:
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        # Get exams from database
+        exams = db.query(AssignmentExam).filter(
+            AssignmentExam.file_id == file_id,
+            AssignmentExam.type == 'exam'
+        ).order_by(AssignmentExam.parsed_date).all()
+        
+        if not exams:
+            return {
+                "file_id": file_id,
+                "filename": file.filename,
+                "message": "No exams found for this file",
+                "exams": []
+            }
+        
+        # Format the exam dates
+        exam_list = []
+        for exam in exams:
+            exam_list.append({
+                "id": exam.id,
+                "description": exam.description,
+                "exam_date": exam.parsed_date.isoformat(),
+                "confidence": exam.confidence
+            })
+        
+        return {
+            "file_id": file_id,
+            "filename": file.filename,
+            "total_exams": len(exam_list),
+            "exams": exam_list
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/assignments/{file_id}")
+async def get_assignment_dates(file_id: int, db: Session = Depends(get_db)):
+    """Get assignment dates for a specific file"""
+    try:
+        # Get file from database
+        file = db.query(File).filter(File.id == file_id).first()
+        if not file:
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        # Get assignments from database
+        assignments = db.query(AssignmentExam).filter(
+            AssignmentExam.file_id == file_id,
+            AssignmentExam.type == 'assignment'
+        ).order_by(AssignmentExam.parsed_date).all()
+        
+        if not assignments:
+            return {
+                "file_id": file_id,
+                "filename": file.filename,
+                "message": "No assignments found for this file",
+                "assignments": []
+            }
+        
+        # Format the assignment dates
+        assignment_list = []
+        for assignment in assignments:
+            assignment_list.append({
+                "id": assignment.id,
+                "description": assignment.description,
+                "due_date": assignment.parsed_date.isoformat(),
+                "confidence": assignment.confidence
+            })
+        
+        return {
+            "file_id": file_id,
+            "filename": file.filename,
+            "total_assignments": len(assignment_list),
+            "assignments": assignment_list
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/lectures/{file_id}")
+async def get_lecture_schedule(file_id: int, db: Session = Depends(get_db)):
+    """Get all lecture days, hours, and discussion sections for a specific file"""
+    try:
+        # Get file from database
+        file = db.query(File).filter(File.id == file_id).first()
+        if not file:
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        # Get lectures from database
+        lectures = db.query(Lectures).filter(
+            Lectures.file_id == file_id
+        ).order_by(Lectures.day, Lectures.start_time).all()
+        
+        if not lectures:
+            return {
+                "file_id": file_id,
+                "filename": file.filename,
+                "message": "No lecture schedule found for this file",
+                "lectures": [],
+                "schedule": {},
+                "by_type": {}
+            }
+        
+        # Group lectures by day
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        schedule = {}
+        
+        # Group lectures by type
+        by_type = {
+            "lecture": [],
+            "lab": [],
+            "discussion": []
+        }
+        
+        for lecture in lectures:
+            day_name = days[lecture.day]
+            if day_name not in schedule:
+                schedule[day_name] = []
+            
+            lecture_data = {
+                "id": lecture.id,
+                "type": lecture.type or "lecture",  
+                "start_time": lecture.start_time.isoformat(),
+                "end_time": lecture.end_time.isoformat(),
+                "start_date": lecture.start_date.isoformat(),
+                "end_date": lecture.end_date.isoformat(),
+                "location": lecture.location
+            }
+            
+            schedule[day_name].append(lecture_data)
+            
+            # Add to type-specific lists
+            lecture_type = lecture.type or "lecture"
+            if lecture_type in by_type:
+                by_type[lecture_type].append(lecture_data)
+        
+        return {
+            "file_id": file_id,
+            "filename": file.filename,
+            "total_lectures": len(lectures),
+            "schedule": schedule,
+            "by_type": by_type
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/syllabus/{file_id}/all")
+async def get_all_syllabus_data(file_id: int, db: Session = Depends(get_db)):
+    """Return summary, exams, assignments, and lectures in one response. Cached in Redis."""
+    r = get_redis_client()
+    cache_key = _cache_key_all(file_id)
+    try:
+        cached = r.get(cache_key)
+        if cached:
+            return json.loads(cached)
+    except Exception:
+        cached = None
+
+    # Build fresh response
+    try:
+        file = db.query(File).filter(File.id == file_id).first()
+        if not file:
+            raise HTTPException(status_code=404, detail="File not found")
+
+        # Summary
+        summary = db.query(Summary).filter(Summary.file_id == file_id).first()
+        summary_payload = None
+        if summary:
+            summary_payload = {
+                "summary": summary.summary,
+                "confidence": summary.confidence,
+                "created_at": summary.created_at
+            }
+
+        # Exams
+        exams_q = db.query(AssignmentExam).filter(AssignmentExam.file_id == file_id, AssignmentExam.type == 'exam').order_by(AssignmentExam.parsed_date).all()
+        exams_payload = [
+            {
+                "id": exam.id,
+                "description": exam.description,
+                "exam_date": exam.parsed_date.isoformat(),
+                "confidence": exam.confidence
+            }
+            for exam in exams_q
+        ]
+
+        # Assignments
+        assignments_q = db.query(AssignmentExam).filter(AssignmentExam.file_id == file_id, AssignmentExam.type == 'assignment').order_by(AssignmentExam.parsed_date).all()
+        assignments_payload = [
+            {
+                "id": a.id,
+                "description": a.description,
+                "due_date": a.parsed_date.isoformat(),
+                "confidence": a.confidence
+            }
+            for a in assignments_q
+        ]
+
+        # Lectures
+        lectures_q = db.query(Lectures).filter(Lectures.file_id == file_id).order_by(Lectures.day, Lectures.start_time).all()
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        schedule = {}
+        by_type = {"lecture": [], "lab": [], "discussion": []}
+        for lec in lectures_q:
+            day_name = days[lec.day]
+            schedule.setdefault(day_name, []).append({
+                "id": lec.id,
+                "type": lec.type or "lecture",
+                "start_time": lec.start_time.isoformat(),
+                "end_time": lec.end_time.isoformat(),
+                "start_date": lec.start_date.isoformat(),
+                "end_date": lec.end_date.isoformat(),
+                "location": lec.location
+            })
+            t = lec.type or "lecture"
+            if t in by_type:
+                by_type[t].append(lec.id)
+
+        payload = {
+            "file_id": file_id,
+            "filename": getattr(file, 'filename', ''),
+            "summary": summary_payload,
+            "exams": exams_payload,
+            "assignments": assignments_payload,
+            "lectures": {
+                "schedule": schedule,
+                "by_type": by_type,
+                "total": len(lectures_q)
+            }
+        }
+
+        # Cache
+        try:
+            r.setex(cache_key, 300, json.dumps(payload))
+        except Exception:
+            pass
+
+        return payload
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+
+def _parse_time(time_str: str) -> time:
+    """Parse time string to time object"""
+    try:
+        if ":" in time_str:
+            hours, minutes = map(int, time_str.split(":"))
+            return time(hour=hours, minute=minutes)
+        else:
+            # Handle formats like "9" or "14"
+            hours = int(time_str)
+            return time(hour=hours, minute=0)
+    except:
+        return time(hour=9, minute=0)  # Default to 9:00 AM
+
+def _parse_date(date_str: str) -> date:
+    """Parse date string to date object"""
+    try:
+        if "-" in date_str:
+            year, month, day = map(int, date_str.split("-"))
+            return date(year=year, month=month, day=day)
+        else:
+            # Handle other formats if needed
+            return date(2024, 1, 15)  # Default date
+    except:
+        return date(2024, 1, 15)  # Default date

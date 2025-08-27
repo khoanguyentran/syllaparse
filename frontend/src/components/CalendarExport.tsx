@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { Calendar, Download, CheckCircle, AlertCircle } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Calendar, CheckCircle, AlertCircle, Plus } from 'lucide-react'
 import { Lecture, AssignmentExam, CalendarEvent } from '@/types'
 
 interface CalendarExportProps {
@@ -18,8 +18,37 @@ export default function CalendarExport({
   const [isExporting, setIsExporting] = useState(false)
   const [exportStatus, setExportStatus] = useState<'idle' | 'success' | 'error'>('idle')
   const [exportMessage, setExportMessage] = useState('')
+  const [hasGoogleAccess, setHasGoogleAccess] = useState(false)
+  const [isCheckingAccess, setIsCheckingAccess] = useState(true)
 
   const totalItems = selectedLectures.length + selectedAssignments.length
+
+  // Check if user has Google Calendar access
+  useEffect(() => {
+    const checkGoogleAccess = async () => {
+      try {
+        // Check if we have a valid Google access token
+        const token = localStorage.getItem('google_access_token')
+        if (token) {
+          // Verify token is still valid by making a test API call
+          const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary', {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          })
+          setHasGoogleAccess(response.ok)
+        } else {
+          setHasGoogleAccess(false)
+        }
+      } catch (error) {
+        setHasGoogleAccess(false)
+      } finally {
+        setIsCheckingAccess(false)
+      }
+    }
+
+    checkGoogleAccess()
+  }, [])
 
   const createCalendarEvents = (): CalendarEvent[] => {
     const events: CalendarEvent[] = []
@@ -102,30 +131,74 @@ export default function CalendarExport({
       return
     }
 
+    if (!hasGoogleAccess) {
+      setExportStatus('error')
+      setExportMessage('Google Calendar access required. Please sign in with Google and grant calendar permissions.')
+      return
+    }
+
     setIsExporting(true)
     setExportStatus('idle')
     setExportMessage('')
 
     try {
       const events = createCalendarEvents()
+      const token = localStorage.getItem('google_access_token')
       
-      // Create a calendar file in iCal format
-      const icalContent = generateICalContent(events)
-      const blob = new Blob([icalContent], { type: 'text/calendar' })
-      const url = URL.createObjectURL(blob)
-      
-      // Create download link
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'syllabus-events.ics'
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      if (!token) {
+        throw new Error('No Google access token found')
+      }
 
-      setExportStatus('success')
-      setExportMessage(`Successfully exported ${events.length} events to calendar file`)
-      onExportComplete()
+      // Create events in Google Calendar
+      let successCount = 0
+      let errorCount = 0
+
+      for (const event of events) {
+        try {
+          const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              summary: event.summary,
+              description: event.description,
+              start: event.start,
+              end: event.end,
+              location: event.location,
+              reminders: {
+                useDefault: false,
+                overrides: [
+                  { method: 'popup', minutes: 30 },
+                  { method: 'email', minutes: 60 }
+                ]
+              }
+            })
+          })
+
+          if (response.ok) {
+            successCount++
+          } else {
+            errorCount++
+          }
+        } catch (error) {
+          errorCount++
+        }
+      }
+
+      if (errorCount === 0) {
+        setExportStatus('success')
+        setExportMessage(`Successfully added ${successCount} events to your Google Calendar!`)
+        onExportComplete()
+      } else if (successCount > 0) {
+        setExportStatus('success')
+        setExportMessage(`Added ${successCount} events to Google Calendar. ${errorCount} events failed.`)
+        onExportComplete()
+      } else {
+        setExportStatus('error')
+        setExportMessage('Failed to add events to Google Calendar. Please try again.')
+      }
       
     } catch (error) {
       setExportStatus('error')
@@ -135,35 +208,11 @@ export default function CalendarExport({
     }
   }
 
-  const generateICalContent = (events: CalendarEvent[]): string => {
-    const now = new Date()
-    const icalHeader = [
-      'BEGIN:VCALENDAR',
-      'VERSION:2.0',
-      'PRODID:-//Syllaparse//Calendar Export//EN',
-      'CALSCALE:GREGORIAN',
-      'METHOD:PUBLISH'
-    ].join('\r\n')
-
-    const icalEvents = events.map(event => {
-      const eventLines = [
-        'BEGIN:VEVENT',
-        `UID:${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        `DTSTAMP:${now.toISOString().replace(/[-:]/g, '').split('.')[0]}Z`,
-        `DTSTART:${event.start.dateTime.replace(/[-:]/g, '').split('.')[0]}Z`,
-        `DTEND:${event.end.dateTime.replace(/[-:]/g, '').split('.')[0]}Z`,
-        `SUMMARY:${event.summary}`,
-        `DESCRIPTION:${event.description}`,
-        event.location ? `LOCATION:${event.location}` : '',
-        'END:VEVENT'
-      ].filter(line => line !== '')
-      
-      return eventLines.join('\r\n')
-    }).join('\r\n')
-
-    const icalFooter = 'END:VCALENDAR'
-
-    return [icalHeader, icalEvents, icalFooter].join('\r\n')
+  const requestGoogleAccess = () => {
+    // This would typically trigger the Google OAuth flow
+    // For now, we'll show a message to the user
+    setExportStatus('error')
+    setExportMessage('Please sign in with Google and grant calendar permissions to use this feature.')
   }
 
   const getStatusIcon = () => {
@@ -188,12 +237,23 @@ export default function CalendarExport({
     }
   }
 
+  if (isCheckingAccess) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center justify-center py-8">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <span className="ml-3 text-gray-600">Checking Google Calendar access...</span>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-gray-900">
           <Calendar className="w-5 h-5 inline mr-2 text-blue-600" />
-          Export to Calendar
+          Add to Google Calendar
         </h3>
         {totalItems > 0 && (
           <span className="text-sm text-gray-600 bg-gray-100 px-2 py-1 rounded-full">
@@ -204,7 +264,7 @@ export default function CalendarExport({
 
       <div className="space-y-4">
         <div className="text-sm text-gray-600">
-          <p>Export selected lectures and assignments to your calendar:</p>
+          <p>Add selected lectures and assignments directly to your Google Calendar:</p>
           <ul className="mt-2 space-y-1">
             {selectedLectures.length > 0 && (
               <li>• {selectedLectures.length} lecture/discussion times (recurring weekly)</li>
@@ -226,30 +286,55 @@ export default function CalendarExport({
           </div>
         )}
 
-        <button
-          onClick={exportToGoogleCalendar}
-          disabled={isExporting || totalItems === 0}
-          className={`w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-lg font-medium transition-colors ${
-            isExporting || totalItems === 0
-              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-              : 'bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
-          }`}
-        >
-          {isExporting ? (
-            <>
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-              <span>Exporting...</span>
-            </>
-          ) : (
-            <>
-              <Download className="w-4 h-4" />
-              <span>Export to Calendar (.ics)</span>
-            </>
-          )}
-        </button>
+        {!hasGoogleAccess ? (
+          <div className="space-y-3">
+            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <div className="flex items-center space-x-2">
+                <AlertCircle className="w-4 h-4 text-yellow-600" />
+                <span className="text-sm text-yellow-800">
+                  Google Calendar access required
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={requestGoogleAccess}
+              className="w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-lg font-medium bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+            >
+              <Calendar className="w-4 h-4" />
+              <span>Connect Google Calendar</span>
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={exportToGoogleCalendar}
+            disabled={isExporting || totalItems === 0}
+            className={`w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-lg font-medium transition-colors ${
+              isExporting || totalItems === 0
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                : 'bg-green-600 text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
+            }`}
+          >
+            {isExporting ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                <span>Adding to Calendar...</span>
+              </>
+            ) : (
+              <>
+                <Plus className="w-4 h-4" />
+                <span>Add to Google Calendar</span>
+              </>
+            )}
+          </button>
+        )}
 
         <div className="text-xs text-gray-500 text-center">
-          <p>Download an .ics file that you can import into Google Calendar, Outlook, or any calendar app</p>
+          <p>
+            {hasGoogleAccess 
+              ? "Events will be added directly to your primary Google Calendar with reminders"
+              : "Sign in with Google and grant calendar permissions to add events directly"
+            }
+          </p>
         </div>
       </div>
     </div>
