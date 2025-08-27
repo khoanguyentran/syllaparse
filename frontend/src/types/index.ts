@@ -29,6 +29,51 @@ export interface SyllabusData {
   academicYear: string
 }
 
+export interface SyllabusFile {
+  file_id: number
+  filename: string
+  upload_date: string
+  filepath: string
+  user_id: number
+}
+
+export interface Lecture {
+  id: number
+  file_id: number
+  day: number // 0 = monday, 1 = tuesday, etc.
+  start_time: string
+  end_time: string
+  start_date: string
+  end_date: string
+  location: string | null
+  created_at: string
+}
+
+export interface AssignmentExam {
+  id: number
+  file_id: number
+  parsed_date: string
+  confidence: number | null
+  type: 'assignment' | 'exam'
+  description: string
+  created_at: string
+  updated_at: string
+}
+
+export interface CalendarEvent {
+  summary: string
+  description: string
+  start: {
+    dateTime: string
+    timeZone: string
+  }
+  end: {
+    dateTime: string
+    timeZone: string
+  }
+  location?: string
+}
+
 export interface UploadProgress {
   percentage: number
   status: 'idle' | 'uploading' | 'processing' | 'completed' | 'error'

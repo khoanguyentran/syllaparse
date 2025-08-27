@@ -16,8 +16,12 @@ export const api = {
     })
   },
   
-  getFiles: (userId: number) => 
-    fetch(`${API_BASE_URL}/files?user_id=${userId}`),
+  getFiles: (userId?: number, googleId?: string) => {
+    const params = new URLSearchParams()
+    if (userId) params.append('user_id', userId.toString())
+    if (googleId) params.append('google_id', googleId)
+    return fetch(`${API_BASE_URL}/files?${params.toString()}`)
+  },
   
   getFile: (fileId: number) => 
     fetch(`${API_BASE_URL}/files/${fileId}`),
