@@ -79,7 +79,8 @@ async def create_lecture(
             end_time=lecture_data.end_time,
             start_date=lecture_data.start_date,
             end_date=lecture_data.end_date,
-            location=lecture_data.location
+            location=lecture_data.location,
+            type=lecture_data.type
         )
         
         db.add(new_lecture)

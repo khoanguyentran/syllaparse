@@ -100,16 +100,19 @@ async def get_summary_by_file(
 ):
     """Get summary by file ID"""
     try:
+        logger.info(f"Getting summary for file {file_id}")
         summary = db.query(Summary).filter(Summary.file_id == file_id).first()
         if not summary:
+            logger.warning(f"No summary found for file {file_id}")
             raise HTTPException(status_code=404, detail="Summary not found for this file")
         
+        logger.info(f"Summary found for file {file_id}: {summary.summary[:100]}...")
         return summary
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting summary by file: {e}")
+        logger.error(f"Error getting summary by file {file_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to get summary")
 
 @router.put("/{summary_id}", response_model=SummaryResponse)

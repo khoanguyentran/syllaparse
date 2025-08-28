@@ -35,7 +35,8 @@ class File(Base):
     # Relationships
     user = relationship("User", back_populates="files")
     summary = relationship("Summary", back_populates="file", uselist=False, cascade="all, delete-orphan")
-    assignments_exams = relationship("AssignmentExam", back_populates="file", cascade="all, delete-orphan")
+    assignments = relationship("Assignment", back_populates="file", cascade="all, delete-orphan")
+    exams = relationship("Exam", back_populates="file", cascade="all, delete-orphan")
     lectures = relationship("Lectures", back_populates="file", cascade="all, delete-orphan")
 
 class Summary(Base):
@@ -57,24 +58,42 @@ class Summary(Base):
         CheckConstraint(confidence <= 100, name='confidence_max'),
     )
 
-class AssignmentExam(Base):
-    __tablename__ = "assignments_exams"
+class Assignment(Base):
+    __tablename__ = "assignments"
     
     id = Column(Integer, primary_key=True, index=True)
     file_id = Column(Integer, ForeignKey("files.id"), nullable=False, index=True)
-    parsed_date = Column(Date, nullable=False)
+    due_date = Column(Date, nullable=False)
     confidence = Column(Integer, nullable=True)
-    type = Column(String(20), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     description = Column(String(255), nullable=False)
     
     # Relationships
-    file = relationship("File", back_populates="assignments_exams")
+    file = relationship("File", back_populates="assignments")
     
     # Constraints
     __table_args__ = (
-        CheckConstraint(type.in_(['assignment', 'exam']), name='valid_type'),
+        CheckConstraint(confidence >= 0, name='confidence_min'),
+        CheckConstraint(confidence <= 100, name='confidence_max'),
+    )
+
+class Exam(Base):
+    __tablename__ = "exams"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    file_id = Column(Integer, ForeignKey("files.id"), nullable=False, index=True)
+    exam_date = Column(Date, nullable=False)
+    confidence = Column(Integer, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    description = Column(String(255), nullable=False)
+    
+    # Relationships
+    file = relationship("File", back_populates="exams")
+    
+    # Constraints
+    __table_args__ = (
         CheckConstraint(confidence >= 0, name='confidence_min'),
         CheckConstraint(confidence <= 100, name='confidence_max'),
     )

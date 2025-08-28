@@ -50,27 +50,46 @@ export const api = {
     fetch(`${API_BASE_URL}/summaries/${summaryId}`),
   
   getSummaryByFile: (fileId: number) => 
-    fetch(`${API_BASE_URL}/summaries/file/${fileId}`),
+    fetch(`${API_BASE_URL}/summaries/file/${fileId}?t=${Date.now()}`),
   
-  // Assignments/Exams - Read Only (for frontend display)
-  getAssignmentsExams: (fileId?: number, type?: string) => {
+  // Assignments - Read Only (for frontend display)
+  getAssignments: (fileId?: number) => {
     const params = new URLSearchParams()
     if (fileId) params.append('file_id', fileId.toString())
-    if (type) params.append('type', type)
+    params.append('t', Date.now().toString()) // Cache busting
     
-    return fetch(`${API_BASE_URL}/assignments-exams?${params.toString()}`)
+    return fetch(`${API_BASE_URL}/assignments?${params.toString()}`)
   },
   
-  getAssignmentExam: (assignmentId: number) => 
-    fetch(`${API_BASE_URL}/assignments-exams/${assignmentId}`),
+  getAssignment: (assignmentId: number) => 
+    fetch(`${API_BASE_URL}/assignments/${assignmentId}`),
   
-  getAssignmentsExamsByFile: (fileId: number) => 
-    fetch(`${API_BASE_URL}/assignments-exams/file/${fileId}`),
+  getAssignmentsByFile: (fileId: number) => 
+    fetch(`${API_BASE_URL}/assignments/file/${fileId}?t=${Date.now()}`),
+  
+  // Exams - Read Only (for frontend display)
+  getExams: (fileId?: number) => {
+    const params = new URLSearchParams()
+    if (fileId) params.append('file_id', fileId.toString())
+    params.append('t', Date.now().toString()) // Cache busting
+    
+    return fetch(`${API_BASE_URL}/exams?${params.toString()}`)
+  },
+  
+  getExam: (examId: number) => 
+    fetch(`${API_BASE_URL}/exams/${examId}`),
+  
+  getExamsByFile: (fileId: number) => 
+    fetch(`${API_BASE_URL}/exams/file/${fileId}?t=${Date.now()}`),
+  
+  getSyllabusData: (fileId: number) => 
+    fetch(`${API_BASE_URL}/processing/parse/${fileId}/all?t=${Date.now()}`),
   
   getLectures: (fileId?: number, day?: number) => {
     const params = new URLSearchParams()
     if (fileId) params.append('file_id', fileId.toString())
     if (day !== undefined) params.append('day', day.toString())
+    params.append('t', Date.now().toString()) // Cache busting
     
     return fetch(`${API_BASE_URL}/lectures?${params.toString()}`)
   },
@@ -79,7 +98,7 @@ export const api = {
     fetch(`${API_BASE_URL}/lectures/${lectureId}`),
   
   getLecturesByFile: (fileId: number) => 
-    fetch(`${API_BASE_URL}/lectures/file/${fileId}`),
+    fetch(`${API_BASE_URL}/lectures/file/${fileId}?t=${Date.now()}`),
   
   // Users - Essential operations for frontend
   createUser: (userData: { google_id: string; email: string; name: string }) =>
@@ -99,6 +118,14 @@ export const api = {
   // Processing endpoints
   parseSyllabus: (fileId: number) => 
     fetch(`${API_BASE_URL}/processing/parse/${fileId}`, {
+      method: 'POST'
+    }),
+  
+  getParsingStatus: (fileId: number) => 
+    fetch(`${API_BASE_URL}/processing/parse/${fileId}/status`),
+  
+  cancelParsing: (fileId: number) => 
+    fetch(`${API_BASE_URL}/processing/parse/${fileId}/cancel`, {
       method: 'POST'
     }),
   

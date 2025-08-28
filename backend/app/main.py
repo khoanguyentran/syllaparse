@@ -6,8 +6,8 @@ from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from app.database.db import get_db, get_engine
-from app.database.models import Base, User, File, Summary, AssignmentExam, Lectures
-from app.routes import files, auth, users, summaries, assignments_exams, lectures
+from app.database.models import Base, User, File, Summary, Assignment, Exam, Lectures
+from app.routes import files, auth, users, summaries, assignments, exams, lectures
 from app.processing import routes as processing
 import logging
 import os
@@ -40,7 +40,8 @@ app.include_router(files.router)
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(summaries.router)
-app.include_router(assignments_exams.router)
+app.include_router(assignments.router)
+app.include_router(exams.router)
 app.include_router(lectures.router)
 app.include_router(processing.router)
 

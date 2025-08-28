@@ -11,7 +11,7 @@ from sqlalchemy import create_engine, text
 # Add the parent directory to the Python path so we can import from app
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from app.database.models import User, File, Summary, AssignmentExam, Lectures
+from app.database.models import User, File, Summary, Assignment, Exam, Lectures
 
 def check_database():
     """Check all database tables and their contents"""
@@ -35,7 +35,8 @@ def check_database():
         check_users(engine)
         check_files(engine)
         check_summaries(engine)
-        check_assignments_exams(engine)
+        check_assignments(engine)
+        check_exams(engine)
         check_lectures(engine)
         
     except Exception as e:
@@ -119,33 +120,59 @@ def check_summaries(engine):
     except Exception as e:
         print(f"   Error checking summaries: {e}")
 
-def check_assignments_exams(engine):
-    """Check assignments_exams table"""
-    print("\n📚 ASSIGNMENTS/EXAMS TABLE:")
+def check_assignments(engine):
+    """Check assignments table"""
+    print("\n📚 ASSIGNMENTS TABLE:")
     print("-" * 30)
     
     try:
         with engine.connect() as connection:
-            result = connection.execute(text("SELECT * FROM assignments_exams"))
+            result = connection.execute(text("SELECT * FROM assignments"))
             assignments = result.fetchall()
             
             if not assignments:
-                print("   No assignments/exams found")
+                print("   No assignments found")
                 return
             
             for assignment in assignments:
                 print(f"   ID: {assignment[0]}")
                 print(f"   File ID: {assignment[1]}")
-                print(f"   Date: {assignment[2]}")
+                print(f"   Due Date: {assignment[2]}")
                 print(f"   Confidence: {assignment[3]}")
-                print(f"   Type: {assignment[4]}")
-                print(f"   Description: {assignment[5]}")
-                print(f"   Created: {assignment[6]}")
-                print(f"   Updated: {assignment[7]}")
+                print(f"   Created: {assignment[4]}")
+                print(f"   Updated: {assignment[5]}")
+                print(f"   Description: {assignment[6]}")
                 print("   ---")
                 
     except Exception as e:
         print(f"   Error checking assignments: {e}")
+
+def check_exams(engine):
+    """Check exams table"""
+    print("\n🧪 EXAMS TABLE:")
+    print("-" * 30)
+    
+    try:
+        with engine.connect() as connection:
+            result = connection.execute(text("SELECT * FROM exams"))
+            exams = result.fetchall()
+            
+            if not exams:
+                print("   No exams found")
+                return
+            
+            for exam in exams:
+                print(f"   ID: {exam[0]}")
+                print(f"   File ID: {exam[1]}")
+                print(f"   Exam Date: {exam[2]}")
+                print(f"   Confidence: {exam[3]}")
+                print(f"   Created: {exam[4]}")
+                print(f"   Updated: {exam[5]}")
+                print(f"   Description: {exam[6]}")
+                print("   ---")
+                
+    except Exception as e:
+        print(f"   Error checking exams: {e}")
 
 def check_lectures(engine):
     """Check lectures table"""

@@ -2,17 +2,19 @@
 
 import { useState, useEffect } from 'react'
 import { Calendar, CheckCircle, AlertCircle, Plus } from 'lucide-react'
-import { Lecture, AssignmentExam, CalendarEvent } from '@/types'
+import { Lecture, Assignment, Exam, CalendarEvent } from '@/types'
 
 interface CalendarExportProps {
   selectedLectures: Lecture[]
-  selectedAssignments: AssignmentExam[]
+  selectedAssignments: Assignment[]
+  selectedExams: Exam[]
   onExportComplete: () => void
 }
 
 export default function CalendarExport({ 
   selectedLectures, 
   selectedAssignments, 
+  selectedExams,
   onExportComplete 
 }: CalendarExportProps) {
   const [isExporting, setIsExporting] = useState(false)
@@ -21,7 +23,7 @@ export default function CalendarExport({
   const [hasGoogleAccess, setHasGoogleAccess] = useState(false)
   const [isCheckingAccess, setIsCheckingAccess] = useState(true)
 
-  const totalItems = selectedLectures.length + selectedAssignments.length
+  const totalItems = selectedLectures.length + selectedAssignments.length + selectedExams.length
 
   // Check if user has Google Calendar access
   useEffect(() => {
@@ -98,9 +100,9 @@ export default function CalendarExport({
       }
     })
 
-    // Create events for selected assignments/exams
+    // Create events for selected assignments
     selectedAssignments.forEach(assignment => {
-      const dueDate = new Date(assignment.parsed_date)
+      const dueDate = new Date(assignment.dueDate)
       const eventStart = new Date(dueDate)
       eventStart.setHours(9, 0, 0, 0) // Set to 9 AM on due date
       
@@ -108,8 +110,8 @@ export default function CalendarExport({
       eventEnd.setHours(10, 0, 0, 0) // Set to 10 AM on due date
       
       events.push({
-        summary: `${assignment.type === 'exam' ? 'Exam' : 'Assignment'}: ${assignment.description}`,
-        description: `Due: ${assignment.description}`,
+        summary: `Assignment: ${assignment.title}`,
+        description: `Due: ${assignment.description || assignment.title}`,
         start: {
           dateTime: eventStart.toISOString(),
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -117,7 +119,32 @@ export default function CalendarExport({
         end: {
           dateTime: eventEnd.toISOString(),
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-        }
+        },
+        location: assignment.location || undefined
+      })
+    })
+
+    // Create events for selected exams
+    selectedExams.forEach(exam => {
+      const examDate = new Date(exam.examDate)
+      const eventStart = new Date(examDate)
+      eventStart.setHours(9, 0, 0, 0) // Set to 9 AM on exam date
+      
+      const eventEnd = new Date(examDate)
+      eventEnd.setHours(11, 0, 0, 0) // Set to 11 AM on exam date (2 hour duration)
+      
+      events.push({
+        summary: `Exam: ${exam.title}`,
+        description: `Exam: ${exam.description || exam.title}`,
+        start: {
+          dateTime: eventStart.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        end: {
+          dateTime: eventEnd.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        location: exam.location || undefined
       })
     })
 
@@ -270,7 +297,10 @@ export default function CalendarExport({
               <li>• {selectedLectures.length} lecture/discussion times (recurring weekly)</li>
             )}
             {selectedAssignments.length > 0 && (
-              <li>• {selectedAssignments.length} assignments/exams (due dates)</li>
+              <li>• {selectedAssignments.length} assignments (due dates)</li>
+            )}
+            {selectedExams.length > 0 && (
+              <li>• {selectedExams.length} exams (exam dates)</li>
             )}
           </ul>
         </div>

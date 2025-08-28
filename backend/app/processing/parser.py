@@ -121,8 +121,8 @@ class Parser:
 
         Lecture Type Guidelines:
         - Use 'lecture' for: regular class sessions, main course meetings, instructor presentations, lectures
-        - Use 'lab' for: laboratory sessions, practical work, hands-on activities, computer labs, studio sessions, workshops
-        - Use 'discussion' for: discussion sections, recitations, small group meetings, Q&A sessions, review sessions, tutorials
+        - Use 'lab' for: laboratory sessions and computer labs
+        - Use 'discussion' for: discussion sections and recitations
 
         Examples:
         - "Class meets MWF 9:00-10:30" → type: "lecture"
@@ -139,7 +139,7 @@ class Parser:
         - For assignments and exams, set confidence to 85 if you're confident, 70 if somewhat confident, 50 if uncertain
 
         Syllabus text to parse:
-        {text[:3000]}
+        {text}
 
         Return only valid JSON:
         """

@@ -7,6 +7,7 @@ import clsx from 'clsx'
 interface FileUploadProps {
   onFileSelect: (file: File) => void
   onUpload: () => void
+  onCancel?: () => void
   selectedFile: File | null
   isUploading: boolean
   uploadProgress: number
@@ -18,6 +19,7 @@ interface FileUploadProps {
 export default function FileUpload({
   onFileSelect,
   onUpload,
+  onCancel,
   selectedFile,
   isUploading,
   uploadProgress,
@@ -168,20 +170,44 @@ export default function FileUpload({
             </div>
           )}
           
+          {isUploading && (
+            <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <div className="flex items-center space-x-3 mb-3">
+                <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                <span className="text-sm font-medium text-blue-900">
+                  {uploadProgress <= 50 ? 'Uploading...' : 'Processing...'} {uploadProgress}%
+                </span>
+              </div>
+              <div className="w-full bg-blue-200 rounded-full h-2">
+                <div 
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${uploadProgress}%` }}
+                ></div>
+              </div>
+              {uploadProgress > 50 && uploadProgress < 100 && (
+                <div className="mt-2 text-xs text-blue-600 text-center">
+                  Upload complete, AI processing in progress...
+                </div>
+              )}
+            </div>
+          )}
+          
           <button
-            onClick={onUpload}
-            disabled={!selectedFile || isUploading || !!error}
+            onClick={isUploading ? onCancel : onUpload}
+            disabled={!selectedFile || !!error}
             className={clsx(
               "mt-4 w-full px-4 py-2 rounded-lg font-medium transition-colors",
-              selectedFile && !isUploading && !error
+              isUploading
+                ? "bg-red-600 text-white hover:bg-red-700"
+                : selectedFile && !error
                 ? "bg-blue-600 text-white hover:bg-blue-700"
                 : "bg-gray-300 text-gray-500 cursor-not-allowed"
             )}
           >
             {isUploading ? (
               <div className="flex items-center justify-center space-x-2">
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                <span>Processing... {uploadProgress}%</span>
+                <X className="w-4 h-4" />
+                <span>Cancel</span>
               </div>
             ) : (
               "Parse Syllabus"

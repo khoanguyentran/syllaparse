@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         google_id: googleId,
         filename: file.name,
-        filepath: publicUrl,  // Send complete GCS public URL
+        filepath: publicUrl,
         file_size: file.size,
         content_type: file.type,
       }),
@@ -93,17 +93,23 @@ export async function POST(request: NextRequest) {
     if (!pythonResponse.ok) {
       const errorData = await pythonResponse.json()
       console.error('Python backend error:', errorData)
-      // Even if Python backend fails, we still have the file in GCS
-      // You might want to handle this differently based on your requirements
+      throw new Error(`Python backend failed: ${errorData.message || 'Unknown error'}`)
     }
 
-    // Return success response
+    const pythonData = await pythonResponse.json()
+    console.log('Python backend response:', pythonData)
+    
+    if (!pythonData.file_id) {
+      throw new Error('Python backend did not return file_id')
+    }
+
     return NextResponse.json({
       message: 'File uploaded successfully',
       filename: file.name,
-      filepath: publicUrl,  // Return complete GCS public URL
+      filepath: publicUrl, 
       file_size: file.size,
       upload_date: new Date().toISOString(),
+      file_id: pythonData.file_id, 
     })
 
   } catch (error) {

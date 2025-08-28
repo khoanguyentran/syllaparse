@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
 from app.database.db import get_db, get_session_local
-from app.database.models import File, Summary, AssignmentExam, Lectures
+from app.database.models import File, Summary, Assignment, Exam, Lectures
 from .parser import Parser
 from typing import List, Dict, Any
 from datetime import time, date
@@ -10,6 +10,7 @@ import asyncio
 import json
 import os
 import redis
+import logging
 
 router = APIRouter(prefix="/processing", tags=["processing"])
 
@@ -52,9 +53,32 @@ async def parse_syllabus(file_id: int, background_tasks: BackgroundTasks, db: Se
 
     return {"status": "processing", "file_id": file_id}
 
+async def trigger_parsing_for_file(file_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """Helper function to trigger parsing for a file (used by other routes)"""
+    # Validate file exists
+    file = db.query(File).filter(File.id == file_id).first()
+    if not file:
+        return False
+
+    # Initialize status
+    r = get_redis_client()
+    r.hset(_status_key(file_id), mapping={
+        "status": "queued",
+        "progress": "0",
+        "message": "Queued for parsing"
+    })
+    r.expire(_status_key(file_id), 3600)
+
+    # Launch background task
+    background_tasks.add_task(_run_parse_and_store, file_id)
+    return True
+
 def _run_parse_and_store(file_id: int) -> None:
     """Parses file, stores to DB, and updates Redis status/caches."""
+    logger = logging.getLogger(__name__)
+    logger.info(f"Starting parse and store for file {file_id}")
     r = get_redis_client()
+    
     def set_status(status: str, progress: int, message: str):
         try:
             r.hset(_status_key(file_id), mapping={
@@ -65,24 +89,52 @@ def _run_parse_and_store(file_id: int) -> None:
             r.expire(_status_key(file_id), 3600)
         except Exception:
             pass
+    
+    def check_cancelled() -> bool:
+        """Check if parsing has been cancelled."""
+        try:
+            current_status = r.hget(_status_key(file_id), "status")
+            return current_status == "cancelled"
+        except Exception:
+            return False
 
     set_status("started", 5, "Starting parse")
     SessionLocal = get_session_local()
     db = SessionLocal()
     try:
+        # Check for cancellation before starting
+        if check_cancelled():
+            logger.info(f"Parsing cancelled for file {file_id}")
+            return
+            
         file = db.query(File).filter(File.id == file_id).first()
         if not file:
+            logger.error(f"File {file_id} not found in database")
             set_status("failed", 100, "File not found")
             return
 
+        logger.info(f"Processing file {file_id}: {file.filename}")
         parser = Parser()
         set_status("extracting", 15, "Extracting text and calling AI")
+        
+        # Check for cancellation before AI processing
+        if check_cancelled():
+            logger.info(f"Parsing cancelled for file {file_id} before AI processing")
+            return
+            
         result = asyncio.run(parser.parse_syllabus(file.file_path))
         if not result.get("success"):
+            logger.error(f"Parsing failed for file {file_id}: {result.get('error', 'Unknown error')}")
             set_status("failed", 100, f"Parsing failed: {result.get('error', 'Unknown error')}")
             return
         parsed_data = result.get("parsed", {})
+        logger.info(f"Parsing completed for file {file_id}, extracted data: {list(parsed_data.keys())}")
 
+        # Check for cancellation before saving
+        if check_cancelled():
+            logger.info(f"Parsing cancelled for file {file_id} before saving")
+            return
+            
         set_status("saving", 60, "Saving parsed data")
 
         # Summary
@@ -123,15 +175,14 @@ def _run_parse_and_store(file_id: int) -> None:
 
         # Assignments
         if parsed_data.get("assignments"):
-            db.query(AssignmentExam).filter(AssignmentExam.file_id == file_id, AssignmentExam.type == 'assignment').delete()
+            db.query(Assignment).filter(Assignment.file_id == file_id).delete()
             for assignment_data in parsed_data["assignments"]:
                 try:
                     due_date = _parse_date(assignment_data.get("parsed_date", "2024-01-15"))
-                    db.add(AssignmentExam(
+                    db.add(Assignment(
                         file_id=file_id,
-                        parsed_date=due_date,
+                        due_date=due_date,
                         description=assignment_data.get("description", ""),
-                        type="assignment",
                         confidence=assignment_data.get("confidence", 70)
                     ))
                 except Exception:
@@ -139,15 +190,14 @@ def _run_parse_and_store(file_id: int) -> None:
 
         # Exams
         if parsed_data.get("exams"):
-            db.query(AssignmentExam).filter(AssignmentExam.file_id == file_id, AssignmentExam.type == 'exam').delete()
+            db.query(Exam).filter(Exam.file_id == file_id).delete()
             for exam_data in parsed_data["exams"]:
                 try:
                     exam_date = _parse_date(exam_data.get("parsed_date", "2024-01-15"))
-                    db.add(AssignmentExam(
+                    db.add(Exam(
                         file_id=file_id,
-                        parsed_date=exam_date,
+                        exam_date=exam_date,
                         description=exam_data.get("description", ""),
-                        type="exam",
                         confidence=exam_data.get("confidence", 70)
                     ))
                 except Exception:
@@ -182,6 +232,26 @@ async def get_parsing_status(file_id: int):
     if not data:
         return {"status": "unknown", "message": "No status found"}
     return data
+
+@router.post("/parse/{file_id}/cancel")
+async def cancel_parsing(file_id: int):
+    """Cancel parsing for a file by setting status to cancelled."""
+    r = get_redis_client()
+    
+    # Check if parsing is in progress
+    current_status = r.hget(_status_key(file_id), "status")
+    if not current_status or current_status in ["completed", "failed", "cancelled"]:
+        return {"status": "error", "message": "Cannot cancel: parsing not in progress"}
+    
+    # Set status to cancelled
+    r.hset(_status_key(file_id), mapping={
+        "status": "cancelled",
+        "progress": "0",
+        "message": "Parsing cancelled by user"
+    })
+    r.expire(_status_key(file_id), 3600)
+    
+    return {"status": "cancelled", "message": "Parsing cancelled successfully"}
 
 @router.get("/summary/{file_id}")
 async def get_file_summary(file_id: int, db: Session = Depends(get_db)):
@@ -218,10 +288,9 @@ async def get_exam_dates(file_id: int, db: Session = Depends(get_db)):
             raise HTTPException(status_code=404, detail="File not found")
         
         # Get exams from database
-        exams = db.query(AssignmentExam).filter(
-            AssignmentExam.file_id == file_id,
-            AssignmentExam.type == 'exam'
-        ).order_by(AssignmentExam.parsed_date).all()
+        exams = db.query(Exam).filter(
+            Exam.file_id == file_id
+        ).order_by(Exam.exam_date).all()
         
         if not exams:
             return {
@@ -261,10 +330,9 @@ async def get_assignment_dates(file_id: int, db: Session = Depends(get_db)):
             raise HTTPException(status_code=404, detail="File not found")
         
         # Get assignments from database
-        assignments = db.query(AssignmentExam).filter(
-            AssignmentExam.file_id == file_id,
-            AssignmentExam.type == 'assignment'
-        ).order_by(AssignmentExam.parsed_date).all()
+        assignments = db.query(Assignment).filter(
+            Assignment.file_id == file_id
+        ).order_by(Assignment.due_date).all()
         
         if not assignments:
             return {
@@ -391,24 +459,24 @@ async def get_all_syllabus_data(file_id: int, db: Session = Depends(get_db)):
             }
 
         # Exams
-        exams_q = db.query(AssignmentExam).filter(AssignmentExam.file_id == file_id, AssignmentExam.type == 'exam').order_by(AssignmentExam.parsed_date).all()
+        exams_q = db.query(Exam).filter(Exam.file_id == file_id).order_by(Exam.exam_date).all()
         exams_payload = [
             {
                 "id": exam.id,
                 "description": exam.description,
-                "exam_date": exam.parsed_date.isoformat(),
+                "exam_date": exam.exam_date.isoformat(),
                 "confidence": exam.confidence
             }
             for exam in exams_q
         ]
 
         # Assignments
-        assignments_q = db.query(AssignmentExam).filter(AssignmentExam.file_id == file_id, AssignmentExam.type == 'assignment').order_by(AssignmentExam.parsed_date).all()
+        assignments_q = db.query(Assignment).filter(Assignment.file_id == file_id).order_by(Assignment.due_date).all()
         assignments_payload = [
             {
                 "id": a.id,
                 "description": a.description,
-                "due_date": a.parsed_date.isoformat(),
+                "due_date": a.due_date.isoformat(),
                 "confidence": a.confidence
             }
             for a in assignments_q

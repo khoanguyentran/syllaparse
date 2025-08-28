@@ -59,6 +59,16 @@ export default function LectureTimes({
     }
   }
 
+  const handleSelectAll = () => {
+    if (selectedLectures.length === lectures.length) {
+      // If all are selected, deselect all
+      onLectureSelect([])
+    } else {
+      // Select all lectures
+      onLectureSelect([...lectures])
+    }
+  }
+
   const formatTime = (timeString: string) => {
     return new Date(`2000-01-01T${timeString}`).toLocaleTimeString('en-US', {
       hour: 'numeric',
@@ -107,16 +117,25 @@ export default function LectureTimes({
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-200">
+      <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-900">
-            <Clock className="w-5 h-5 inline mr-2 text-blue-600" />
-            Lecture Times & Discussion Sections
-          </h3>
-          {selectedLectures.length > 0 && (
-            <span className="text-sm text-gray-600">
-              {selectedLectures.length} selected
-            </span>
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center">
+              <Clock className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Course Schedule</h3>
+              <p className="text-sm text-gray-600">Weekly class times and locations</p>
+            </div>
+          </div>
+
+          {lectures.length > 0 && (
+            <button
+              onClick={handleSelectAll}
+              className="px-3 py-1 text-xs font-medium text-blue-600 bg-blue-100 hover:bg-blue-200 rounded-full transition-colors"
+            >
+              {selectedLectures.length === lectures.length ? 'Deselect All' : 'Select All'}
+            </button>
           )}
         </div>
       </div>
@@ -169,6 +188,17 @@ export default function LectureTimes({
                                 <Clock className="w-4 h-4 text-gray-500" />
                                 <span className="text-sm font-medium text-gray-900">
                                   {formatTime(lecture.start_time)} - {formatTime(lecture.end_time)}
+                                </span>
+                                {/* Session Type Badge */}
+                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                  lecture.type === 'lab' 
+                                    ? 'bg-green-100 text-green-800' 
+                                    : lecture.type === 'discussion' 
+                                    ? 'bg-purple-100 text-purple-800'
+                                    : 'bg-blue-100 text-blue-800'
+                                }`}>
+                                  {lecture.type === 'lab' ? 'Lab' : 
+                                   lecture.type === 'discussion' ? 'Discussion' : 'Lecture'}
                                 </span>
                               </div>
                               

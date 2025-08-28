@@ -1,6 +1,6 @@
 # Database package initialization
 from .db import get_db, get_engine, Base
-from .models import User, File, Summary, AssignmentExam
+from .models import User, File, Summary, Assignment, Exam
 
 __all__ = [
     'get_db',
@@ -9,5 +9,6 @@ __all__ = [
     'User',
     'File',
     'Summary',
-    'AssignmentExam'
+    'Assignment',
+    'Exam'
 ]

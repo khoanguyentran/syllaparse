@@ -1,7 +1,7 @@
 'use client'
 
 import { Assignment } from '@/types'
-import { formatDate, formatTime, getDueStatus, getPriorityColor, getTypeIcon, getTypeLabel } from '@/utils/helpers'
+import { formatDate, formatTime, getDueStatus } from '@/utils/helpers'
 import { Calendar, Clock, MapPin, BookOpen, AlertCircle, Download, CheckCircle } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -24,36 +24,10 @@ export default function AssignmentCard({
   isSelected = false,
   onClick
 }: AssignmentCardProps) {
-  const dueStatus = getDueStatus(assignment.dueDate)
-
-  const getStatusIcon = () => {
-    switch (dueStatus.status) {
-      case 'overdue':
-        return <AlertCircle className="w-4 h-4 text-red-600" />
-      case 'due-soon':
-        return <Clock className="w-4 h-4 text-orange-600" />
-      default:
-        return <Calendar className="w-4 h-4 text-green-600" />
-    }
-  }
-
-  const getStatusText = () => {
-    switch (dueStatus.status) {
-      case 'overdue':
-        return `Overdue by ${dueStatus.days} day${dueStatus.days !== 1 ? 's' : ''}`
-      case 'due-soon':
-        return `Due in ${dueStatus.days} day${dueStatus.days !== 1 ? 's' : ''}`
-      default:
-        return `Due in ${dueStatus.days} day${dueStatus.days !== 1 ? 's' : ''}`
-    }
-  }
-
   return (
     <div 
       className={clsx(
-        "bg-white border-l-4 transition-all duration-200 hover:shadow-md cursor-pointer",
-        dueStatus.status === 'overdue' ? 'border-l-red-500' : 
-        dueStatus.status === 'due-soon' ? 'border-l-orange-500' : 'border-l-green-500',
+        "bg-white border-l-4 transition-all duration-200 hover:shadow-md cursor-pointer border-l-gray-300",
         isSelected && "ring-2 ring-blue-500 ring-opacity-50 bg-blue-50",
         onClick && "hover:bg-gray-50"
       )}
@@ -64,7 +38,7 @@ export default function AssignmentCard({
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center space-x-3">
             <div className="text-2xl">
-              {getTypeIcon(assignment.type)}
+              📋
             </div>
             <div className="flex-1">
               <div className="flex items-center space-x-2">
@@ -155,51 +129,18 @@ export default function AssignmentCard({
             </div>
           )}
 
-          {assignment.weight && (
-            <div className="flex items-center space-x-2">
-              <BookOpen className="w-4 h-4 text-gray-400" />
-              <span className="text-sm text-gray-600">
-                {assignment.weight}% of grade
-              </span>
-            </div>
-          )}
+
         </div>
 
         {/* Tags */}
         <div className="flex flex-wrap items-center gap-2 mb-3">
           <span className={clsx(
-            "px-2 py-1 text-xs font-medium rounded-full border",
-            getPriorityColor(assignment.priority)
-          )}>
-            {assignment.priority.charAt(0).toUpperCase() + assignment.priority.slice(1)} Priority
-          </span>
-          
-          <span className={clsx(
             "px-2 py-1 text-xs font-medium rounded-full",
-            dueStatus.bg,
-            dueStatus.color
+            getDueStatus(assignment.dueDate).bg,
+            getDueStatus(assignment.dueDate).color
           )}>
-            {getTypeLabel(assignment.type)}
+            Assignment
           </span>
-        </div>
-
-        {/* Status Bar */}
-        <div className={clsx(
-          "flex items-center justify-between p-3 rounded-lg",
-          dueStatus.bg
-        )}>
-          <div className="flex items-center space-x-2">
-            {getStatusIcon()}
-            <span className={clsx("text-sm font-medium", dueStatus.color)}>
-              {getStatusText()}
-            </span>
-          </div>
-          
-          {assignment.materials && assignment.materials.length > 0 && (
-            <div className="text-xs text-gray-500">
-              {assignment.materials.length} material{assignment.materials.length !== 1 ? 's' : ''} required
-            </div>
-          )}
         </div>
       </div>
     </div>

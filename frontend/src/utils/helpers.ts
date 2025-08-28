@@ -45,41 +45,7 @@ export const getDueStatus = (dueDate: string) => {
   }
 }
 
-export const getPriorityColor = (priority: string) => {
-  switch (priority) {
-    case 'high':
-      return 'bg-red-100 text-red-800 border-red-200'
-    case 'medium':
-      return 'bg-yellow-100 text-yellow-800 border-yellow-200'
-    case 'low':
-      return 'bg-green-100 text-green-800 border-green-200'
-    default:
-      return 'bg-gray-100 text-gray-800 border-gray-200'
-  }
-}
 
-export const getTypeIcon = (type: string) => {
-  switch (type) {
-    case 'exam':
-      return '📚'
-    case 'homework':
-      return '📝'
-    case 'quiz':
-      return '❓'
-    case 'project':
-      return '🚀'
-    case 'presentation':
-      return '🎤'
-    case 'lab':
-      return '🧪'
-    default:
-      return '📋'
-  }
-}
-
-export const getTypeLabel = (type: string) => {
-  return type.charAt(0).toUpperCase() + type.slice(1)
-}
 
 export const sortAssignmentsByDate = (assignments: Assignment[]) => {
   return [...assignments].sort((a, b) => 
@@ -91,15 +57,11 @@ export const filterAssignments = (
   assignments: Assignment[], 
   filters: { 
     course?: string
-    type?: Assignment['type']
-    priority?: Assignment['priority']
     searchQuery?: string
   }
 ) => {
   return assignments.filter(assignment => {
     if (filters.course && assignment.course !== filters.course) return false
-    if (filters.type && assignment.type !== filters.type) return false
-    if (filters.priority && assignment.priority !== filters.priority) return false
     if (filters.searchQuery) {
       const query = filters.searchQuery.toLowerCase()
       const matches = 

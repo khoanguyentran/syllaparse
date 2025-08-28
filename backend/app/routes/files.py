@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.database.db import get_db
 from app.database.models import File as FileModel, User
+from app.processing.routes import trigger_parsing_for_file
 from pydantic import BaseModel
 import logging
 
@@ -31,10 +32,11 @@ class FileUploadResponse(BaseModel):
 @router.post("/upload", response_model=FileUploadResponse)
 async def upload_file(
     file_data: FileUploadRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """
-    Store file metadata in database (file already uploaded to GCS by Next.js frontend)
+    Store file metadata in database and trigger parsing (file already uploaded to GCS by Next.js frontend)
     """
     try:
         # Find user by Google ID
@@ -52,8 +54,16 @@ async def upload_file(
         db.commit()
         db.refresh(db_file)
         
+        # Trigger parsing in the background
+        try:
+            await trigger_parsing_for_file(db_file.id, background_tasks, db)
+            logger.info(f"Parsing triggered for file {db_file.id}")
+        except Exception as parse_error:
+            logger.warning(f"Failed to trigger parsing for file {db_file.id}: {parse_error}")
+            # Don't fail the upload if parsing fails to start
+        
         return FileUploadResponse(
-            message="File metadata stored successfully",
+            message="File metadata stored successfully and parsing initiated",
             file_id=db_file.id,
             filename=db_file.filename,
             filepath=db_file.file_path,  # Complete GCS public URL
