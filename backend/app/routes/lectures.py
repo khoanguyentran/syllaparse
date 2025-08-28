@@ -22,6 +22,7 @@ class LectureCreate(BaseModel):
     start_date: date
     end_date: date
     location: str = None
+    type: str = 'lecture'  # 'lecture', 'lab', 'discussion'
 
 class LectureUpdate(BaseModel):
     day: int = None
@@ -30,6 +31,7 @@ class LectureUpdate(BaseModel):
     start_date: date = None
     end_date: date = None
     location: str = None
+    type: str = None  # 'lecture', 'lab', 'discussion'
 
 class LectureResponse(BaseModel):
     id: int
@@ -40,6 +42,7 @@ class LectureResponse(BaseModel):
     start_date: date
     end_date: date
     location: str
+    type: str  # 'lecture', 'lab', 'discussion'
     created_at: datetime
 
     class Config:
@@ -189,6 +192,9 @@ async def update_lecture(
         
         if lecture_data.location is not None:
             lecture.location = lecture_data.location
+        
+        if lecture_data.type is not None:
+            lecture.type = lecture_data.type
         
         # Validate updated data
         if lecture.start_date > lecture.end_date:

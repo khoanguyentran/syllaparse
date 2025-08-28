@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Clock, MapPin, Calendar, CheckCircle } from 'lucide-react'
+import { Clock, MapPin, Calendar, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react'
 import { Lecture } from '@/types'
 import api from '@/utils/api'
 
@@ -19,6 +19,7 @@ export default function LectureTimes({
   const [lectures, setLectures] = useState<Lecture[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isCollapsed, setIsCollapsed] = useState(false)
 
   useEffect(() => {
     if (fileId) {
@@ -117,22 +118,32 @@ export default function LectureTimes({
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+      <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-green-50 to-emerald-50">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-emerald-500 rounded-lg flex items-center justify-center">
               <Clock className="w-5 h-5 text-white" />
             </div>
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">Course Schedule</h3>
-              <p className="text-sm text-gray-600">Weekly class times and locations</p>
-            </div>
+            <button
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              className="flex items-center space-x-2 hover:bg-green-100 rounded-lg p-2 transition-colors"
+            >
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Course Schedule</h3>
+                <p className="text-sm text-gray-600">Weekly class times and locations</p>
+              </div>
+              {isCollapsed ? (
+                <ChevronDown className="w-5 h-5 text-gray-500" />
+              ) : (
+                <ChevronUp className="w-5 h-5 text-gray-500" />
+              )}
+            </button>
           </div>
 
-          {lectures.length > 0 && (
+          {lectures.length > 0 && !isCollapsed && (
             <button
               onClick={handleSelectAll}
-              className="px-3 py-1 text-xs font-medium text-blue-600 bg-blue-100 hover:bg-blue-200 rounded-full transition-colors"
+              className="px-3 py-1 text-xs font-medium text-green-600 bg-green-100 hover:bg-green-200 rounded-full transition-colors"
             >
               {selectedLectures.length === lectures.length ? 'Deselect All' : 'Select All'}
             </button>
@@ -140,103 +151,105 @@ export default function LectureTimes({
         </div>
       </div>
 
-      <div className="p-6">
-        {isLoading ? (
-          <div className="text-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-2 text-gray-600">Loading lecture times...</p>
-          </div>
-        ) : error ? (
-          <div className="text-center py-8 text-red-500">
-            <p>{error}</p>
-            <button
-              onClick={loadLectures}
-              className="mt-2 text-sm text-blue-600 hover:text-blue-800 underline"
-            >
-              Try again
-            </button>
-          </div>
-        ) : lectures.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <Clock className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-            <p>No lecture times found for this syllabus</p>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {Object.entries(groupLecturesByDay()).map(([dayName, dayLectures]) => (
-              <div key={dayName} className="border border-gray-200 rounded-lg overflow-hidden">
-                <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-                  <h4 className="font-medium text-gray-900">{dayName}</h4>
-                </div>
-                
-                <div className="divide-y divide-gray-200">
-                  {dayLectures.map((lecture) => {
-                    const isSelected = selectedLectures.some(l => l.id === lecture.id)
-                    
-                    return (
-                      <div
-                        key={lecture.id}
-                        className={`px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors ${
-                          isSelected ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
-                        }`}
-                        onClick={() => handleLectureToggle(lecture)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center space-x-3">
-                              <div className="flex items-center space-x-2">
-                                <Clock className="w-4 h-4 text-gray-500" />
-                                <span className="text-sm font-medium text-gray-900">
-                                  {formatTime(lecture.start_time)} - {formatTime(lecture.end_time)}
-                                </span>
-                                {/* Session Type Badge */}
-                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                  lecture.type === 'lab' 
-                                    ? 'bg-green-100 text-green-800' 
-                                    : lecture.type === 'discussion' 
-                                    ? 'bg-purple-100 text-purple-800'
-                                    : 'bg-blue-100 text-blue-800'
-                                }`}>
-                                  {lecture.type === 'lab' ? 'Lab' : 
-                                   lecture.type === 'discussion' ? 'Discussion' : 'Lecture'}
-                                </span>
+      {!isCollapsed && (
+        <div className="p-6">
+          {isLoading ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto"></div>
+              <p className="mt-2 text-gray-600">Loading lecture times...</p>
+            </div>
+          ) : error ? (
+            <div className="text-center py-8 text-red-500">
+              <p>{error}</p>
+              <button
+                onClick={loadLectures}
+                className="mt-2 text-sm text-green-600 hover:text-green-800 underline"
+              >
+                Try again
+              </button>
+            </div>
+          ) : lectures.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <Clock className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+              <p>No lecture times found for this syllabus</p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {Object.entries(groupLecturesByDay()).map(([dayName, dayLectures]) => (
+                <div key={dayName} className="border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                    <h4 className="font-medium text-gray-900">{dayName}</h4>
+                  </div>
+                  
+                  <div className="divide-y divide-gray-200">
+                    {dayLectures.map((lecture) => {
+                      const isSelected = selectedLectures.some(l => l.id === lecture.id)
+                      
+                      return (
+                        <div
+                          key={lecture.id}
+                          className={`px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors ${
+                            isSelected ? 'bg-green-50 border-l-4 border-l-green-500' : ''
+                          }`}
+                          onClick={() => handleLectureToggle(lecture)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-3">
+                                <div className="flex items-center space-x-2">
+                                  <Clock className="w-4 h-4 text-gray-500" />
+                                  <span className="text-sm font-medium text-gray-900">
+                                    {formatTime(lecture.start_time)} - {formatTime(lecture.end_time)}
+                                  </span>
+                                  {/* Session Type Badge */}
+                                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                    lecture.type === 'lab' 
+                                      ? 'bg-green-100 text-green-800' 
+                                      : lecture.type === 'discussion' 
+                                      ? 'bg-purple-100 text-purple-800'
+                                      : 'bg-blue-100 text-blue-800'
+                                  }`}>
+                                    {lecture.type === 'lab' ? 'Lab' : 
+                                     lecture.type === 'discussion' ? 'Discussion' : 'Lecture'}
+                                  </span>
+                                </div>
+                                
+                                {lecture.location && (
+                                  <div className="flex items-center space-x-1">
+                                    <MapPin className="w-3 h-3 text-gray-400" />
+                                    <span className="text-xs text-gray-500">{lecture.location}</span>
+                                  </div>
+                                )}
                               </div>
                               
-                              {lecture.location && (
+                              <div className="mt-1 flex items-center space-x-4 text-xs text-gray-500">
                                 <div className="flex items-center space-x-1">
-                                  <MapPin className="w-3 h-3 text-gray-400" />
-                                  <span className="text-xs text-gray-500">{lecture.location}</span>
+                                  <Calendar className="w-3 h-3" />
+                                  <span>
+                                    {formatDate(lecture.start_date)} - {formatDate(lecture.end_date)}
+                                  </span>
                                 </div>
-                              )}
-                            </div>
-                            
-                            <div className="mt-1 flex items-center space-x-4 text-xs text-gray-500">
-                              <div className="flex items-center space-x-1">
-                                <Calendar className="w-3 h-3" />
-                                <span>
-                                  {formatDate(lecture.start_date)} - {formatDate(lecture.end_date)}
-                                </span>
                               </div>
                             </div>
-                          </div>
-                          
-                          <div className="ml-4">
-                            {isSelected ? (
-                              <CheckCircle className="w-5 h-5 text-blue-600" />
-                            ) : (
-                              <div className="w-5 h-5 border-2 border-gray-300 rounded-full"></div>
-                            )}
+                            
+                            <div className="ml-4">
+                              {isSelected ? (
+                                <CheckCircle className="w-5 h-5 text-green-600" />
+                              ) : (
+                                <div className="w-5 h-5 border-2 border-gray-300 rounded-full"></div>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )
-                  })}
+                      )
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

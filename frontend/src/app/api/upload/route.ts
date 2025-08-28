@@ -12,8 +12,8 @@ const storage = new Storage({
 const bucketName = process.env.GOOGLE_CLOUD_BUCKET_NAME || 'syllaparse-syllabus-files'
 const bucket = storage.bucket(bucketName)
 
-// Python backend URL
-const PYTHON_BACKEND_URL = process.env.PYTHON_BACKEND_URL || 'http://localhost:8000'
+// Public API URL
+const publicApiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 export async function POST(request: NextRequest) {
   try {
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     const publicUrl = `https://storage.googleapis.com/${bucketName}/${gcsPath}`
 
     // Call Python backend to store file metadata
-    const pythonResponse = await fetch(`${PYTHON_BACKEND_URL}/files/upload`, {
+    const pythonResponse = await fetch(`${publicApiUrl}/files/upload`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -14,4 +14,4 @@ google-cloud-storage==2.14.0
 # Utilities
 python-multipart==0.0.20
 python-dotenv==1.0.0
-redis==5.0.1
+pydantic==2.8.2

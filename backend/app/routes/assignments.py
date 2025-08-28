@@ -3,9 +3,9 @@ from sqlalchemy.orm import Session
 from app.database.db import get_db
 from app.database.models import Assignment, File
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 import logging
-from datetime import datetime, date
+from datetime import datetime, date, time
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -17,19 +17,20 @@ router = APIRouter(prefix="/assignments", tags=["assignments"])
 class AssignmentCreate(BaseModel):
     file_id: int
     due_date: date
-    confidence: int = None
+    confidence: Optional[int] = None
     description: str
 
 class AssignmentUpdate(BaseModel):
-    due_date: date = None
-    confidence: int = None
-    description: str = None
+    due_date: Optional[date] = None
+    confidence: Optional[int] = None
+    description: Optional[str] = None
 
 class AssignmentResponse(BaseModel):
     id: int
     file_id: int
     due_date: date
-    confidence: int
+    due_time: Optional[time] = None
+    confidence: Optional[int] = None
     description: str
     created_at: datetime
     updated_at: datetime

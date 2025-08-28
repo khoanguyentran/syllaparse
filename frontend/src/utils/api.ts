@@ -1,8 +1,8 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const publicApiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 export const api = {
   // Health check
-  health: () => fetch(`${API_BASE_URL}/health`),
+  health: () => fetch(`${publicApiUrl}/health`),
   
   // Files - Upload via Next.js API route (which uploads to GCS and calls Python backend)
   uploadFile: (file: File, googleId: string) => {
@@ -20,14 +20,14 @@ export const api = {
     const params = new URLSearchParams()
     if (userId) params.append('user_id', userId.toString())
     if (googleId) params.append('google_id', googleId)
-    return fetch(`${API_BASE_URL}/files?${params.toString()}`)
+    return fetch(`${publicApiUrl}/files?${params.toString()}`)
   },
   
   getFile: (fileId: number) => 
-    fetch(`${API_BASE_URL}/files/${fileId}`),
+    fetch(`${publicApiUrl}/files/${fileId}`),
   
   deleteFile: (fileId: number) => 
-    fetch(`${API_BASE_URL}/files/${fileId}`, {
+    fetch(`${publicApiUrl}/files/${fileId}`, {
       method: 'DELETE'
     }),
   
@@ -40,17 +40,17 @@ export const api = {
     }),
   
   getUser: (userId: number) => 
-    fetch(`${API_BASE_URL}/users/${userId}`),
+    fetch(`${publicApiUrl}/users/${userId}`),
   
   getUserByGoogleId: (googleId: string) => 
-    fetch(`${API_BASE_URL}/users/google/${googleId}`),
+    fetch(`${publicApiUrl}/users/google/${googleId}`),
   
   // Summaries - Read Only (for frontend display)
   getSummary: (summaryId: number) => 
-    fetch(`${API_BASE_URL}/summaries/${summaryId}`),
+    fetch(`${publicApiUrl}/summaries/${summaryId}`),
   
   getSummaryByFile: (fileId: number) => 
-    fetch(`${API_BASE_URL}/summaries/file/${fileId}?t=${Date.now()}`),
+    fetch(`${publicApiUrl}/summaries/file/${fileId}?t=${Date.now()}`),
   
   // Assignments - Read Only (for frontend display)
   getAssignments: (fileId?: number) => {
@@ -58,14 +58,14 @@ export const api = {
     if (fileId) params.append('file_id', fileId.toString())
     params.append('t', Date.now().toString()) // Cache busting
     
-    return fetch(`${API_BASE_URL}/assignments?${params.toString()}`)
+    return fetch(`${publicApiUrl}/assignments?${params.toString()}`)
   },
   
   getAssignment: (assignmentId: number) => 
-    fetch(`${API_BASE_URL}/assignments/${assignmentId}`),
+    fetch(`${publicApiUrl}/assignments/${assignmentId}`),
   
   getAssignmentsByFile: (fileId: number) => 
-    fetch(`${API_BASE_URL}/assignments/file/${fileId}?t=${Date.now()}`),
+    fetch(`${publicApiUrl}/assignments/file/${fileId}?t=${Date.now()}`),
   
   // Exams - Read Only (for frontend display)
   getExams: (fileId?: number) => {
@@ -73,17 +73,17 @@ export const api = {
     if (fileId) params.append('file_id', fileId.toString())
     params.append('t', Date.now().toString()) // Cache busting
     
-    return fetch(`${API_BASE_URL}/exams?${params.toString()}`)
+    return fetch(`${publicApiUrl}/exams?${params.toString()}`)
   },
   
   getExam: (examId: number) => 
-    fetch(`${API_BASE_URL}/exams/${examId}`),
+    fetch(`${publicApiUrl}/exams/${examId}`),
   
   getExamsByFile: (fileId: number) => 
-    fetch(`${API_BASE_URL}/exams/file/${fileId}?t=${Date.now()}`),
+    fetch(`${publicApiUrl}/exams/file/${fileId}?t=${Date.now()}`),
   
   getSyllabusData: (fileId: number) => 
-    fetch(`${API_BASE_URL}/processing/parse/${fileId}/all?t=${Date.now()}`),
+    fetch(`${publicApiUrl}/processing/parse/${fileId}/all?t=${Date.now()}`),
   
   getLectures: (fileId?: number, day?: number) => {
     const params = new URLSearchParams()
@@ -91,25 +91,25 @@ export const api = {
     if (day !== undefined) params.append('day', day.toString())
     params.append('t', Date.now().toString()) // Cache busting
     
-    return fetch(`${API_BASE_URL}/lectures?${params.toString()}`)
+    return fetch(`${publicApiUrl}/lectures?${params.toString()}`)
   },
   
   getLecture: (lectureId: number) => 
-    fetch(`${API_BASE_URL}/lectures/${lectureId}`),
+    fetch(`${publicApiUrl}/lectures/${lectureId}`),
   
   getLecturesByFile: (fileId: number) => 
-    fetch(`${API_BASE_URL}/lectures/file/${fileId}?t=${Date.now()}`),
+    fetch(`${publicApiUrl}/lectures/file/${fileId}?t=${Date.now()}`),
   
   // Users - Essential operations for frontend
   createUser: (userData: { google_id: string; email: string; name: string }) =>
-    fetch(`${API_BASE_URL}/users`, {
+    fetch(`${publicApiUrl}/users`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(userData)
     }),
   
   updateUser: (userId: number, userData: { name?: string; email?: string }) =>
-    fetch(`${API_BASE_URL}/users/${userId}`, {
+    fetch(`${publicApiUrl}/users/${userId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(userData)
@@ -117,29 +117,32 @@ export const api = {
   
   // Processing endpoints
   parseSyllabus: (fileId: number) => 
-    fetch(`${API_BASE_URL}/processing/parse/${fileId}`, {
+    fetch(`${publicApiUrl}/processing/parse/${fileId}`, {
       method: 'POST'
     }),
   
   getParsingStatus: (fileId: number) => 
-    fetch(`${API_BASE_URL}/processing/parse/${fileId}/status`),
+    fetch(`${publicApiUrl}/processing/parse/${fileId}/status`),
   
   cancelParsing: (fileId: number) => 
-    fetch(`${API_BASE_URL}/processing/parse/${fileId}/cancel`, {
+    fetch(`${publicApiUrl}/processing/parse/${fileId}/cancel`, {
       method: 'POST'
     }),
   
   getFileSummary: (fileId: number) => 
-    fetch(`${API_BASE_URL}/processing/summary/${fileId}`),
+    fetch(`${publicApiUrl}/processing/summary/${fileId}`),
   
   getExamDates: (fileId: number) => 
-    fetch(`${API_BASE_URL}/processing/exams/${fileId}`),
+    fetch(`${publicApiUrl}/processing/exams/${fileId}`),
   
   getAssignmentDates: (fileId: number) => 
-    fetch(`${API_BASE_URL}/processing/assignments/${fileId}`),
+    fetch(`${publicApiUrl}/processing/assignments/${fileId}`),
   
   getLectureSchedule: (fileId: number) => 
-    fetch(`${API_BASE_URL}/processing/lectures/${fileId}`),
+    fetch(`${publicApiUrl}/processing/lectures/${fileId}`),
+  
+  getGradingBreakdown: (fileId: number) => 
+    fetch(`${publicApiUrl}/processing/grading/${fileId}`),
 }
 
 export default api

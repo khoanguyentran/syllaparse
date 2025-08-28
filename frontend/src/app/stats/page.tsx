@@ -20,7 +20,9 @@ export default function StatsPage() {
   const router = useRouter()
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [exams, setExams] = useState<Exam[]>([])
+  const [lectures, setLectures] = useState<Lecture[]>([])
   const [fileSummary, setFileSummary] = useState<string>('')
+  const [courseName, setCourseName] = useState<string>('')
   const [selectedLectures, setSelectedLectures] = useState<Lecture[]>([])
   const [selectedAssignments, setSelectedAssignments] = useState<Assignment[]>([])
   const [selectedExams, setSelectedExams] = useState<Exam[]>([])
@@ -91,19 +93,23 @@ export default function StatsPage() {
     // Clear previous data immediately when loading new syllabus
     setAssignments([])
     setExams([])
+    setLectures([])
     setFileSummary('')
     setSelectedLectures([])
     
     setCurrentFileId(fileId)
     
     try {
-      // Load assignments and exams separately
+      // Load assignments, exams, and lectures separately
       console.log('Loading assignments from backend...')
       const assignmentsResponse = await api.getAssignmentsByFile(fileId)
       console.log('Assignments response status:', assignmentsResponse.status)
       
       const examsResponse = await api.getExamsByFile(fileId)
       console.log('Exams response status:', examsResponse.status)
+      
+      const lecturesResponse = await api.getLecturesByFile(fileId)
+      console.log('Lectures response status:', lecturesResponse.status)
       
       // Process assignments
       if (assignmentsResponse.ok) {
@@ -155,6 +161,23 @@ export default function StatsPage() {
         setExams([])
       }
       
+      // Process lectures
+      if (lecturesResponse.ok) {
+        const lecturesData = await lecturesResponse.json()
+        console.log('Lectures data received:', lecturesData)
+        
+        if (lecturesData && lecturesData.length > 0) {
+          setLectures(lecturesData)
+          console.log('Lectures set:', lecturesData)
+        } else {
+          console.log('No lectures data received, setting empty array')
+          setLectures([])
+        }
+      } else {
+        console.warn('Failed to load lectures:', lecturesResponse.status)
+        setLectures([])
+      }
+      
       // Load syllabus content (summary)
       console.log('Loading summary from backend...')
       const summaryResponse = await api.getSummaryByFile(fileId)
@@ -165,14 +188,25 @@ export default function StatsPage() {
         console.log('Summary data received:', summaryData)
         if (summaryData && summaryData.summary) {
           setFileSummary(summaryData.summary)
+          
+          // Extract course name from summary text
+          const summaryText = summaryData.summary
+          const courseMatch = summaryText.match(/Course:\s*([^\n]+)/i)
+          if (courseMatch && courseMatch[1] && courseMatch[1].trim() !== 'N/A') {
+            setCourseName(courseMatch[1].trim())
+          } else {
+            setCourseName('')
+          }
         } else {
           console.log('No summary data received, setting empty content')
           setFileSummary('')
+          setCourseName('')
         }
       } else {
         console.warn('Failed to load summary:', summaryResponse.status)
         console.log('Setting empty syllabus content')
         setFileSummary('')
+        setCourseName('')
       }
       
     } catch (error) {
@@ -180,7 +214,9 @@ export default function StatsPage() {
       setAuthError('Failed to load syllabus data')
       setAssignments([])
       setExams([])
+      setLectures([])
       setFileSummary('')
+      setCourseName('')
     } finally {
       setIsLoadingSyllabus(false)
     }
@@ -193,6 +229,7 @@ export default function StatsPage() {
       setCurrentFileId(null)
       setAssignments([])
       setExams([])
+      setLectures([])
       setFileSummary('')
       setSelectedLectures([])
     } else {
@@ -255,7 +292,7 @@ export default function StatsPage() {
             />
           </div>
           
-          {currentFileId && <SummaryStats assignments={assignments} exams={exams} />}
+          {currentFileId && <SummaryStats assignments={assignments} exams={exams} lectures={lectures} fileId={currentFileId} />}
         </div>
 
         {/* Auto-loading indicator */}

@@ -43,6 +43,7 @@ export interface BackendAssignment {
   id: number
   file_id: number
   due_date: string
+  due_time: string | null
   confidence: number | null
   description: string
   created_at: string
@@ -53,6 +54,7 @@ export interface BackendExam {
   id: number
   file_id: number
   exam_date: string
+  exam_time: string | null
   confidence: number | null
   description: string
   created_at: string

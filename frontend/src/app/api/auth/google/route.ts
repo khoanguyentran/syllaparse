@@ -12,10 +12,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Call your Python backend to handle Google authentication
-    const pythonBackendUrl = process.env.PYTHON_BACKEND_URL || 'http://localhost:8000'
+    // Call your API backend to handle Google authentication
+    const publicApiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
     
-    const response = await fetch(`${pythonBackendUrl}/auth/google/login`, {
+    const response = await fetch(`${publicApiUrl}/auth/google/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

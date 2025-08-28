@@ -3,9 +3,9 @@ from sqlalchemy.orm import Session
 from app.database.db import get_db
 from app.database.models import Exam, File
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 import logging
-from datetime import datetime, date
+from datetime import datetime, date, time
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -17,19 +17,20 @@ router = APIRouter(prefix="/exams", tags=["exams"])
 class ExamCreate(BaseModel):
     file_id: int
     exam_date: date
-    confidence: int = None
+    confidence: Optional[int] = None
     description: str
 
 class ExamUpdate(BaseModel):
-    exam_date: date = None
-    confidence: int = None
-    description: str = None
+    exam_date: Optional[date] = None
+    confidence: Optional[int] = None
+    description: Optional[str] = None
 
 class ExamResponse(BaseModel):
     id: int
     file_id: int
     exam_date: date
-    confidence: int
+    exam_time: Optional[time] = None
+    confidence: Optional[int] = None
     description: str
     created_at: datetime
     updated_at: datetime

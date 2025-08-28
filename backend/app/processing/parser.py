@@ -1,12 +1,12 @@
 import fitz  # PyMuPDF
 from google.cloud import storage
 from io import BytesIO
-import json
 from .config import OPENAI_API_KEY, DEFAULT_MODEL, MAX_TOKENS
 from openai import OpenAI
+from .types import SyllabusData
 
 class Parser:
-    """Simple PDF parser"""
+    """Parser for syllabus data"""
     
     def __init__(self):
         self.openai_key = OPENAI_API_KEY
@@ -14,7 +14,6 @@ class Parser:
     async def parse_syllabus(self, file_url: str) -> dict:
         """Parse PDF from URL and extract info using GPT"""
         try:
-            # Download and extract text
             text = await self._extract_text(file_url)
             
             # Parse with GPT
@@ -79,173 +78,110 @@ class Parser:
             raise Exception(f"Failed to extract text from GCS: {str(e)}")
     
     async def _gpt_parse(self, text: str) -> dict:
-        """Use GPT to parse syllabus text"""
+        """Use GPT to parse syllabus text using structured output"""
         if not self.openai_key:
             return {"error": "OpenAI API key not configured"}
         
         prompt = f"""
-        Extract comprehensive syllabus information in JSON format. Focus on identifying lecture schedules, assignments, exams, and course details.
+            ## GOAL
+            Parse a university syllabus document to extract structured information about course schedules, assignments, exams, grading policies, and overall course summary. Transform unstructured syllabus text into organized, machine-readable data with confidence scores.
 
-        Return a JSON object with the following structure:
-        {{
-            "course_name": "string",
-            "instructor": "string",
-            "lectures": [
-                {{
-                    "day": "integer (0=monday, 1=tuesday, 2=wednesday, 3=thursday, 4=friday, 5=saturday, 6=sunday)",
-                    "start_time": "HH:MM format (24-hour)",
-                    "end_time": "HH:MM format (24-hour)",
-                    "start_date": "YYYY-MM-DD format",
-                    "end_date": "YYYY-MM-DD format",
-                    "location": "string",
-                    "type": "one of: 'lecture', 'lab', 'discussion'"
-                }}
-            ],
-            "assignments": [
-                {{
-                    "description": "string",
-                    "parsed_date": "YYYY-MM-DD format",
-                    "type": "assignment",
-                    "confidence": "integer (0-100)"
-                }}
-            ],
-            "exams": [
-                {{
-                    "description": "string",
-                    "parsed_date": "YYYY-MM-DD format",
-                    "type": "exam",
-                    "confidence": "integer (0-100)"
-                }}
-            ]
-        }}
+            ## RETURN FORMAT
+            You must return data that matches the SyllabusData schema with these components:
+            - course_name: Full course title and number
+            - instructor: Professor's name and contact info
+            - summary: A paragraph of the course description covering course code, professor's name, topics, objectives, prerequisites, and other relevant information
+            - lectures: Array of meeting times with day (0-6), start_time, end_time, dates, location, type
+            - assignments: Array with description (assignment name and number only), parsed_date, parsed_time, confidence
+            - exams: Array with description, parsed_date, parsed_time, confidence  
+            - grading: Object with categories array (name, weight, description) and confidence
 
-        Lecture Type Guidelines:
-        - Use 'lecture' for: regular class sessions, main course meetings, instructor presentations, lectures
-        - Use 'lab' for: laboratory sessions and computer labs
-        - Use 'discussion' for: discussion sections and recitations
+            ## WARNINGS AND CONSTRAINTS
+            CRITICAL - Follow these rules strictly:
+            - NEVER guess dates, times, or locations - use confidence=50 for uncertain information
+            - Day numbers: 0=Monday, 1=Tuesday, 2=Wednesday, 3=Thursday, 4=Friday, 5=Saturday, 6=Sunday
+            - Time format: 24-hour "HH:MM" (e.g., "14:30" not "2:30 PM")
+            - Date format: "YYYY-MM-DD" only
+            - parsed_time for assignments/exams: Use "HH:MM" format if due time is specified, empty string "" if only date is given
+            - Confidence scores: 85=confident, 70=somewhat confident, 50=uncertain
+            - Default lecture type to "lecture" if unclear
+            - Date pattern handling: If specific dates aren't listed and only days of the week and times are provided:
+              * Fall semester classes: repeat on those days every week for August, September, October, November, December
+              * Spring semester classes: repeat on those days every week for January, February, March, April, May
 
-        Examples:
-        - "Class meets MWF 9:00-10:30" → type: "lecture"
-        - "Lab sessions Tuesdays 2:00-5:00" → type: "lab"  
-        - "Discussion sections Thursdays 3:00-4:00" → type: "discussion"
-        - "Recitation Fridays 1:00-2:00" → type: "discussion"
-        - "Studio time Wednesdays 6:00-9:00" → type: "lab"
+            ## CONTEXT AND EXAMPLES
+            Lecture Type Classification:
+            - "lecture": Regular class sessions, main course meetings, instructor presentations
+            - "lab": Laboratory sessions, computer labs, studio time
+            - "discussion": Discussion sections, recitations, seminars
 
-        Important notes:
-        - For lectures: day must be 0-6 (0=Monday, 1=Tuesday, etc.)
-        - Times should be in 24-hour format (HH:MM)
-        - Dates should be in YYYY-MM-DD format
-        - If a lecture type is not specified, default to 'lecture'
-        - For assignments and exams, set confidence to 85 if you're confident, 70 if somewhat confident, 50 if uncertain
+            Classification Examples:
+            - "Class meets MWF 9:00-10:30" → type: "lecture"
+            - "Lab sessions Tuesdays 2:00-5:00" → type: "lab"  
+            - "Discussion sections Thursdays 3:00-4:00" → type: "discussion"
+            - "Recitation Fridays 1:00-2:00" → type: "discussion"
+            - "Studio time Wednesdays 6:00-9:00" → type: "lab"
 
-        Syllabus text to parse:
-        {text}
+            Course Summary Guidelines:
+            Extract a paragraph description that includes:
+            - Course code and number
+            - Professors name and contact info
+            - Main course topics and subject matter
+            - Learning objectives or goals
+            - Grading policies and late submission policies
+            - Grading scale (e.g. A+ is 90-100, A is 80-89, etc.)
+            - Prerequisites or required background
+            Look for sections like: "Course Description", "Overview", "Introduction", "About this Course", "Learning Objectives"
 
-        Return only valid JSON:
+            Assignment Description Guidelines:
+            Keep assignment descriptions concise with ONLY the name and number:
+            - "Assignment 1" not "Assignment 1 (detailed instructions about submission via GitHub...)"
+            - "Lab Assignment 2" not "Lab Assignment 2 (part of 4 incremental RTL lab assignments). Code submitted via GitHub; lab report (PDF...)"
+            - "Weekly Quiz 3" not "Weekly online quizzes (timed, typically on Mondays, ≤20 minutes). Lowest quiz score dropped..."
+            - "Project Proposal" not "Project Proposal - Submit a 2-page proposal outlining your final project idea..."
+            
+            Grading Information Sources:
+            Look for these section headers: "Grading", "Grade Distribution", "Assessment", "Evaluation", "Weights"
+            Common categories: Assignments, Homework, Projects, Exams, Midterm, Final, Participation, Attendance, Quizzes, Lab Work
+
+            ## SYLLABUS TEXT TO ANALYZE
+            {text}
         """
         
-        return await self._call_gpt(prompt)
+        return await self._run_llm(prompt)
     
-    async def _call_gpt(self, prompt: str) -> dict:
-        """Call OpenAI GPT API"""
+    async def _run_llm(self, prompt: str) -> dict:
+        """Call OpenAI GPT API with structured output"""
         try:
             client = OpenAI(api_key=self.openai_key)
             
-            response = client.chat.completions.create(
+            response = client.beta.chat.completions.parse(
                 model=DEFAULT_MODEL,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=MAX_TOKENS,
-                temperature=0.1  # Lower temperature for more consistent parsing
+                messages=[
+                    {"role": "system", "content": "You are a professor with 20+ years of experience creating syllabi. You understand all syllabi terminology and can perfectly understand other professor's syllabi."},
+                    {"role": "user", "content": prompt}
+                ],
+                response_format=SyllabusData,
+                max_completion_tokens=MAX_TOKENS
             )
             
-            result = response.choices[0].message.content
-            
-            # Try to extract JSON if the response contains extra text
-            try:
-                # Look for JSON content between curly braces
-                start = result.find('{')
-                end = result.rfind('}') + 1
-                if start != -1 and end != 0:
-                    json_str = result[start:end]
-                    return json.loads(json_str)
-                else:
-                    return {"error": "No valid JSON found in response"}
-            except json.JSONDecodeError as e:
-                return {"error": f"Invalid JSON response: {str(e)}"}
+            result = response.choices[0].message.parsed
+            if result:
+                return result.model_dump()
+            else:
+                return {"error": "No parsed result returned"}
             
         except Exception as e:
             return {"error": f"GPT error: {str(e)}"}
     
+
     def _validate_parsed_data(self, data: dict) -> dict:
-        """Validate and clean parsed data"""
+        """Validate and clean parsed data - simplified since structured output handles most validation"""
         if not isinstance(data, dict):
             return {"error": "Parsed data is not a dictionary"}
         
-        # Ensure required fields exist
-        validated = {
-            "course_name": data.get("course_name", ""),
-            "instructor": data.get("instructor", ""),
-            "lectures": [],
-            "assignments": [],
-            "exams": []
-        }
+        if data.get("grading") and data["grading"].get("categories"):
+            total_weight = sum(cat["weight"] for cat in data["grading"]["categories"] if cat.get("weight"))
+            data["grading"]["total_weight"] = total_weight
         
-        # Validate lectures
-        if data.get("lectures"):
-            for lecture in data["lectures"]:
-                if isinstance(lecture, dict):
-                    validated_lecture = {
-                        "day": self._validate_day(lecture.get("day")),
-                        "start_time": lecture.get("start_time", "09:00"),
-                        "end_time": lecture.get("end_time", "10:30"),
-                        "start_date": lecture.get("start_date", "2024-01-15"),
-                        "end_date": lecture.get("end_date", "2024-05-15"),
-                        "location": lecture.get("location", ""),
-                        "type": self._validate_lecture_type(lecture.get("type"))
-                    }
-                    validated["lectures"].append(validated_lecture)
-        
-        # Validate assignments
-        if data.get("assignments"):
-            for assignment in data["assignments"]:
-                if isinstance(assignment, dict):
-                    validated_assignment = {
-                        "description": assignment.get("description", ""),
-                        "parsed_date": assignment.get("parsed_date", "2024-01-15"),
-                        "type": "assignment",
-                        "confidence": min(max(assignment.get("confidence", 70), 0), 100)
-                    }
-                    validated["assignments"].append(validated_assignment)
-        
-        # Validate exams
-        if data.get("exams"):
-            for exam in data["exams"]:
-                if isinstance(exam, dict):
-                    validated_exam = {
-                        "description": exam.get("description", ""),
-                        "parsed_date": exam.get("parsed_date", "2024-01-15"),
-                        "type": "exam",
-                        "confidence": min(max(exam.get("confidence", 70), 0), 100)
-                    }
-                    validated["exams"].append(validated_exam)
-        
-        return validated
-    
-    def _validate_day(self, day) -> int:
-        """Validate and convert day to integer"""
-        if isinstance(day, int) and 0 <= day <= 6:
-            return day
-        
-        if isinstance(day, str):
-            day_map = {"monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3, 
-                      "friday": 4, "saturday": 5, "sunday": 6}
-            return day_map.get(day.lower(), 0)
-        
-        return 0  # Default to Monday
-    
-    def _validate_lecture_type(self, lecture_type: str) -> str:
-        """Validate lecture type"""
-        valid_types = ["lecture", "lab", "discussion"]
-        if lecture_type and lecture_type.lower() in valid_types:
-            return lecture_type.lower()
-        return "lecture"  # Default to lecture
+        return data

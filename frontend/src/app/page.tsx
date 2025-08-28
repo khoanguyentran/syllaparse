@@ -92,6 +92,14 @@ export default function Home() {
               setUploadProgress(100) 
             } else if (statusData.status === 'failed') {
               throw new Error(`Parsing failed: ${statusData.message}`)
+            } else if (statusData.status === 'cancelled') {
+              console.log('Parsing was cancelled')
+              setIsCancelled(true)
+              setIsUploading(false)
+              setUploadProgress(0)
+              setCurrentFileId(null)
+              setSelectedFile(null)
+              return // Exit early on cancellation
             } else {
               console.log('Parsing in progress, waiting...')
               await new Promise(resolve => setTimeout(resolve, 5000)) 

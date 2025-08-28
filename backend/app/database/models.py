@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, Date, ForeignKey, CheckConstraint, Time
+from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, Date, ForeignKey, CheckConstraint, Time, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database.db import Base
@@ -46,6 +46,7 @@ class Summary(Base):
     file_id = Column(Integer, ForeignKey("files.id"), nullable=False, index=True)
     summary = Column(Text, nullable=False)
     confidence = Column(Integer, nullable=True)
+    grading_breakdown = Column(JSON, nullable=True) 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
@@ -64,6 +65,7 @@ class Assignment(Base):
     id = Column(Integer, primary_key=True, index=True)
     file_id = Column(Integer, ForeignKey("files.id"), nullable=False, index=True)
     due_date = Column(Date, nullable=False)
+    due_time = Column(Time, nullable=True) 
     confidence = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -84,6 +86,7 @@ class Exam(Base):
     id = Column(Integer, primary_key=True, index=True)
     file_id = Column(Integer, ForeignKey("files.id"), nullable=False, index=True)
     exam_date = Column(Date, nullable=False)
+    exam_time = Column(Time, nullable=True)  
     confidence = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

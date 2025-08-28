@@ -9,44 +9,39 @@ from datetime import time, date
 import asyncio
 import json
 import os
-import redis
+
 import logging
 
 router = APIRouter(prefix="/processing", tags=["processing"])
 
-# Redis client (lazy init)
-_redis_client = None
-
-def get_redis_client() -> redis.Redis:
-    global _redis_client
-    if _redis_client is not None:
-        return _redis_client
-    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-    _redis_client = redis.from_url(redis_url, decode_responses=True)
-    return _redis_client
+# In-memory status tracking (simple replacement for Redis)
+_parsing_status = {}
 
 def _status_key(file_id: int) -> str:
     return f"parse_status:{file_id}"
 
-def _cache_key_all(file_id: int) -> str:
-    return f"syllabus_all:{file_id}"
+def _get_status(file_id: int) -> dict:
+    """Get parsing status from memory"""
+    return _parsing_status.get(_status_key(file_id), {})
+
+def _set_status(file_id: int, status: str, progress: int, message: str):
+    """Set parsing status in memory"""
+    _parsing_status[_status_key(file_id)] = {
+        "status": status,
+        "progress": str(progress),
+        "message": message
+    }
 
 @router.post("/parse/{file_id}")
 async def parse_syllabus(file_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    """Runs parsing and reports status via Redis."""
+    """Runs parsing and reports status in memory."""
     # Validate file exists
     file = db.query(File).filter(File.id == file_id).first()
     if not file:
         raise HTTPException(status_code=404, detail="File not found")
 
     # Initialize status
-    r = get_redis_client()
-    r.hset(_status_key(file_id), mapping={
-        "status": "queued",
-        "progress": "0",
-        "message": "Queued for parsing"
-    })
-    r.expire(_status_key(file_id), 3600)
+    _set_status(file_id, "queued", 0, "Queued for parsing")
 
     # Launch background task
     background_tasks.add_task(_run_parse_and_store, file_id)
@@ -61,40 +56,31 @@ async def trigger_parsing_for_file(file_id: int, background_tasks: BackgroundTas
         return False
 
     # Initialize status
-    r = get_redis_client()
-    r.hset(_status_key(file_id), mapping={
-        "status": "queued",
-        "progress": "0",
-        "message": "Queued for parsing"
-    })
-    r.expire(_status_key(file_id), 3600)
+    _set_status(file_id, "queued", 0, "Queued for parsing")
 
     # Launch background task
     background_tasks.add_task(_run_parse_and_store, file_id)
     return True
 
 def _run_parse_and_store(file_id: int) -> None:
-    """Parses file, stores to DB, and updates Redis status/caches."""
+    """Parses file, stores to DB, and updates status."""
     logger = logging.getLogger(__name__)
     logger.info(f"Starting parse and store for file {file_id}")
-    r = get_redis_client()
     
     def set_status(status: str, progress: int, message: str):
-        try:
-            r.hset(_status_key(file_id), mapping={
-                "status": status,
-                "progress": str(progress),
-                "message": message
-            })
-            r.expire(_status_key(file_id), 3600)
-        except Exception:
-            pass
+        _set_status(file_id, status, progress, message)
     
     def check_cancelled() -> bool:
-        """Check if parsing has been cancelled."""
+        """Check if parsing has been cancelled or file has been deleted."""
+        status_data = _get_status(file_id)
+        if status_data.get("status") == "cancelled":
+            return True
         try:
-            current_status = r.hget(_status_key(file_id), "status")
-            return current_status == "cancelled"
+            SessionLocal = get_session_local()
+            check_db = SessionLocal()
+            file_exists = check_db.query(File).filter(File.id == file_id).first() is not None
+            check_db.close()
+            return not file_exists
         except Exception:
             return False
 
@@ -140,12 +126,20 @@ def _run_parse_and_store(file_id: int) -> None:
         # Summary
         if parsed_data.get("course_name") or parsed_data.get("instructor"):
             summary_text = f"Course: {parsed_data.get('course_name', 'N/A')}\nInstructor: {parsed_data.get('instructor', 'N/A')}"
+            grading_breakdown = parsed_data.get("grading")  # Get grading data
+            
             existing_summary = db.query(Summary).filter(Summary.file_id == file_id).first()
             if existing_summary:
                 existing_summary.summary = summary_text
+                existing_summary.grading_breakdown = grading_breakdown
                 existing_summary.updated_at = func.now()
             else:
-                db.add(Summary(file_id=file_id, summary=summary_text, confidence=85))
+                db.add(Summary(
+                    file_id=file_id, 
+                    summary=summary_text, 
+                    grading_breakdown=grading_breakdown,
+                    confidence=85
+                ))
 
         # Lectures
         if parsed_data.get("lectures"):
@@ -179,9 +173,15 @@ def _run_parse_and_store(file_id: int) -> None:
             for assignment_data in parsed_data["assignments"]:
                 try:
                     due_date = _parse_date(assignment_data.get("parsed_date", "2024-01-15"))
+                    # Parse time if provided
+                    due_time = None
+                    if assignment_data.get("parsed_time"):
+                        due_time = _parse_time(assignment_data.get("parsed_time"))
+                    
                     db.add(Assignment(
                         file_id=file_id,
                         due_date=due_date,
+                        due_time=due_time,
                         description=assignment_data.get("description", ""),
                         confidence=assignment_data.get("confidence", 70)
                     ))
@@ -194,9 +194,15 @@ def _run_parse_and_store(file_id: int) -> None:
             for exam_data in parsed_data["exams"]:
                 try:
                     exam_date = _parse_date(exam_data.get("parsed_date", "2024-01-15"))
+                    # Parse time if provided
+                    exam_time = None
+                    if exam_data.get("parsed_time"):
+                        exam_time = _parse_time(exam_data.get("parsed_time"))
+                    
                     db.add(Exam(
                         file_id=file_id,
                         exam_date=exam_date,
+                        exam_time=exam_time,
                         description=exam_data.get("description", ""),
                         confidence=exam_data.get("confidence", 70)
                     ))
@@ -205,11 +211,7 @@ def _run_parse_and_store(file_id: int) -> None:
 
         db.commit()
 
-        # Invalidate cache
-        try:
-            r.delete(_cache_key_all(file_id))
-        except Exception:
-            pass
+        # Cache invalidation no longer needed (Redis removed)
 
         set_status("completed", 100, "Parsing completed")
     except Exception as e:
@@ -226,32 +228,47 @@ def _run_parse_and_store(file_id: int) -> None:
 
 @router.get("/parse/{file_id}/status")
 async def get_parsing_status(file_id: int):
-    """Return current parsing status for a file from Redis."""
-    r = get_redis_client()
-    data = r.hgetall(_status_key(file_id)) or {}
+    """Return current parsing status for a file from memory."""
+    data = _get_status(file_id)
     if not data:
         return {"status": "unknown", "message": "No status found"}
     return data
 
 @router.post("/parse/{file_id}/cancel")
-async def cancel_parsing(file_id: int):
-    """Cancel parsing for a file by setting status to cancelled."""
-    r = get_redis_client()
-    
+async def cancel_parsing(file_id: int, db: Session = Depends(get_db)):
+    """Cancel parsing for a file by setting status to cancelled and delete the file."""
     # Check if parsing is in progress
-    current_status = r.hget(_status_key(file_id), "status")
+    status_data = _get_status(file_id)
+    current_status = status_data.get("status")
     if not current_status or current_status in ["completed", "failed", "cancelled"]:
         return {"status": "error", "message": "Cannot cancel: parsing not in progress"}
     
     # Set status to cancelled
-    r.hset(_status_key(file_id), mapping={
-        "status": "cancelled",
-        "progress": "0",
-        "message": "Parsing cancelled by user"
-    })
-    r.expire(_status_key(file_id), 3600)
+    _set_status(file_id, "cancelled", 0, "Parsing cancelled by user")
     
-    return {"status": "cancelled", "message": "Parsing cancelled successfully"}
+    # Delete the file from database (this will cascade delete all related data)
+    try:
+        file = db.query(File).filter(File.id == file_id).first()
+        if file:
+            filename = file.filename
+            db.delete(file)
+            db.commit()
+            logging.getLogger(__name__).info(f"Deleted file {file_id} ({filename}) from database due to cancellation")
+            
+            return {
+                "status": "cancelled", 
+                "message": "Parsing cancelled and file deleted successfully"
+            }
+        else:
+            return {"status": "cancelled", "message": "Parsing cancelled but file not found in database"}
+    except Exception as e:
+        # If database deletion fails, still report cancellation success
+        logging.getLogger(__name__).error(f"Failed to delete file {file_id} from database: {e}")
+        return {
+            "status": "cancelled", 
+            "message": "Parsing cancelled but file cleanup failed",
+            "error": str(e)
+        }
 
 @router.get("/summary/{file_id}")
 async def get_file_summary(file_id: int, db: Session = Depends(get_db)):
@@ -273,6 +290,38 @@ async def get_file_summary(file_id: int, db: Session = Depends(get_db)):
             "summary": summary.summary,
             "confidence": summary.confidence,
             "created_at": summary.created_at
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/grading/{file_id}")
+async def get_grading_breakdown(file_id: int, db: Session = Depends(get_db)):
+    """Get grading breakdown for a specific file"""
+    try:
+        # Get file from database
+        file = db.query(File).filter(File.id == file_id).first()
+        if not file:
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        # Get summary with grading breakdown from database
+        summary = db.query(Summary).filter(Summary.file_id == file_id).first()
+        if not summary:
+            raise HTTPException(status_code=404, detail="Summary not found for this file")
+        
+        grading_data = summary.grading_breakdown
+        if not grading_data:
+            return {
+                "file_id": file_id,
+                "filename": file.filename,
+                "message": "No grading information found for this file",
+                "grading": None
+            }
+        
+        return {
+            "file_id": file_id,
+            "filename": file.filename,
+            "grading": grading_data
         }
         
     except Exception as e:
@@ -432,15 +481,7 @@ async def get_lecture_schedule(file_id: int, db: Session = Depends(get_db)):
 
 @router.get("/syllabus/{file_id}/all")
 async def get_all_syllabus_data(file_id: int, db: Session = Depends(get_db)):
-    """Return summary, exams, assignments, and lectures in one response. Cached in Redis."""
-    r = get_redis_client()
-    cache_key = _cache_key_all(file_id)
-    try:
-        cached = r.get(cache_key)
-        if cached:
-            return json.loads(cached)
-    except Exception:
-        cached = None
+    """Return summary, exams, assignments, and lectures in one response."""
 
     # Build fresh response
     try:
@@ -515,11 +556,7 @@ async def get_all_syllabus_data(file_id: int, db: Session = Depends(get_db)):
             }
         }
 
-        # Cache
-        try:
-            r.setex(cache_key, 300, json.dumps(payload))
-        except Exception:
-            pass
+        # Caching removed (Redis no longer used)
 
         return payload
     except Exception as e:
