@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { BookOpen, Download, FileText } from 'lucide-react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -9,13 +9,13 @@ import SyllabusViewer from '@/components/stats/SyllabusViewer'
 import SyllabusHistory from '@/components/general/SyllabusHistory'
 import LectureTimes from '@/components/stats/LectureTimes'
 import CalendarExport from '@/components/general/CalendarExport'
-import { Assignment, Exam, BackendAssignment, BackendExam, Lecture } from '@/types'
+import { Assignment, Exam, Lecture } from '@/types'
 import Exams from '@/components/stats/Exams'
 import Assignments from '@/components/stats/Assignments'
 import AppHeader from '@/components/general/AppHeader'
 import api from '@/utils/api'
 
-export default function StatsPage() {
+function StatsContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const [assignments, setAssignments] = useState<Assignment[]>([])
@@ -28,18 +28,17 @@ export default function StatsPage() {
   const [selectedExams, setSelectedExams] = useState<Exam[]>([])
   const [authError, setAuthError] = useState<string | null>(null)
   const [googleId, setGoogleId] = useState<string | null>(null)
-  const [currentFileId, setCurrentFileId] = useState<number | null>(null)
+  const [currentFileId, setCurrentFileId] = useState<string | null>(null)
   const [isLoadingSyllabus, setIsLoadingSyllabus] = useState(false)
   const [isAutoLoading, setIsAutoLoading] = useState(false)
+  const [pdfFile, setPdfFile] = useState<File | null>(null)
 
   useEffect(() => {
     const fileId = searchParams.get('fileId')
     if (fileId && !currentFileId) {
-      const numericFileId = parseInt(fileId)
-      if (!isNaN(numericFileId)) {
-        setCurrentFileId(numericFileId)
-        loadSyllabusData(numericFileId)
-      }
+      // File ID is now a UUID string, no need to parse as integer
+      setCurrentFileId(fileId)
+      loadSyllabusData(fileId)
     }
   }, [searchParams, currentFileId])
 
@@ -84,7 +83,7 @@ export default function StatsPage() {
   }
 
   // Load real data from backend when syllabus is selected
-  const loadSyllabusData = async (fileId: number) => {
+  const loadSyllabusData = async (fileId: string) => {
     if (!fileId) return
     
     console.log('loadSyllabusData called with fileId:', fileId)
@@ -96,6 +95,7 @@ export default function StatsPage() {
     setLectures([])
     setFileSummary('')
     setSelectedLectures([])
+    setPdfFile(null)
     
     setCurrentFileId(fileId)
     
@@ -117,14 +117,7 @@ export default function StatsPage() {
         console.log('Assignments data received:', assignmentsData)
         
         if (assignmentsData && assignmentsData.length > 0) {
-          const assignmentsList: Assignment[] = assignmentsData.map((assignment: BackendAssignment) => ({
-            id: assignment.id.toString(),
-            title: assignment.description,
-            dueDate: assignment.due_date,
-            description: assignment.description,
-            course: undefined,
-            location: undefined
-          }))
+          const assignmentsList: Assignment[] = assignmentsData
           setAssignments(assignmentsList)
           console.log('Assignments set:', assignmentsList)
         } else {
@@ -142,14 +135,7 @@ export default function StatsPage() {
         console.log('Exams data received:', examsData)
         
         if (examsData && examsData.length > 0) {
-          const examsList: Exam[] = examsData.map((exam: BackendExam) => ({
-            id: exam.id.toString(),
-            title: exam.description,
-            examDate: exam.exam_date,
-            description: exam.description,
-            course: undefined,
-            location: undefined
-          }))
+          const examsList: Exam[] = examsData
           setExams(examsList)
           console.log('Exams set:', examsList)
         } else {
@@ -209,6 +195,37 @@ export default function StatsPage() {
         setCourseName('')
       }
       
+      // Load PDF file
+      console.log('Loading file info from backend...')
+      try {
+        const fileResponse = await api.getFile(fileId)
+        console.log('File response status:', fileResponse.status)
+        
+        if (fileResponse.ok) {
+          const fileData = await fileResponse.json()
+          console.log('File data received:', fileData)
+          
+          if (fileData && fileData.filepath) {
+            console.log('Fetching PDF from:', fileData.filepath)
+            const pdfResponse = await fetch(fileData.filepath)
+            
+            if (pdfResponse.ok) {
+              const pdfBlob = await pdfResponse.blob()
+              const pdfFile = new File([pdfBlob], fileData.filename, { type: 'application/pdf' })
+              setPdfFile(pdfFile)
+              console.log('PDF file loaded successfully')
+            } else {
+              console.warn('Failed to fetch PDF file:', pdfResponse.status)
+            }
+          }
+        } else {
+          console.warn('Failed to load file info:', fileResponse.status)
+        }
+      } catch (fileError) {
+        console.error('Error loading PDF file:', fileError)
+        // Don't fail the whole process if PDF loading fails
+      }
+      
     } catch (error) {
       console.error('Error loading syllabus data:', error)
       setAuthError('Failed to load syllabus data')
@@ -217,14 +234,15 @@ export default function StatsPage() {
       setLectures([])
       setFileSummary('')
       setCourseName('')
+      setPdfFile(null)
     } finally {
       setIsLoadingSyllabus(false)
     }
   }
 
   // Handle syllabus selection from history
-  const handleSyllabusSelect = (fileId: number) => {
-    if (fileId === 0) {
+  const handleSyllabusSelect = (fileId: string | number) => {
+    if (fileId === 0 || fileId === '0') {
       // Reset to no selection
       setCurrentFileId(null)
       setAssignments([])
@@ -232,17 +250,19 @@ export default function StatsPage() {
       setLectures([])
       setFileSummary('')
       setSelectedLectures([])
+      setPdfFile(null)
     } else {
       console.log('Syllabus selected from history:', fileId)
-      setCurrentFileId(fileId)
+      const fileIdString = typeof fileId === 'number' ? fileId.toString() : fileId
+      setCurrentFileId(fileIdString)
       
       // Update URL with file ID
       const params = new URLSearchParams(searchParams.toString())
-      params.set('fileId', fileId.toString())
+      params.set('fileId', fileIdString)
       router.replace(`/stats?${params.toString()}`, { scroll: false })
       
       // Load the syllabus data
-      loadSyllabusData(fileId)
+      loadSyllabusData(fileIdString)
     }
   }
 
@@ -338,7 +358,7 @@ export default function StatsPage() {
                 <div className="p-6 min-h-[400px]">
                   <SyllabusViewer
                     content={fileSummary}
-                    pdfFile={null}
+                    pdfFile={pdfFile}
                   />
                 </div>
               </div>
@@ -417,5 +437,20 @@ export default function StatsPage() {
         )}
       </main>
     </div>
+  )
+}
+
+export default function StatsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-2 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    }>
+      <StatsContent />
+    </Suspense>
   )
 }

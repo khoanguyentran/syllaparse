@@ -5,7 +5,8 @@ from app.database.models import Assignment, File
 from pydantic import BaseModel
 from typing import List, Optional
 import logging
-from datetime import datetime, date, time
+from datetime import datetime, date as Date, time
+import uuid
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -15,21 +16,21 @@ router = APIRouter(prefix="/assignments", tags=["assignments"])
 
 # Pydantic models for Assignments
 class AssignmentCreate(BaseModel):
-    file_id: int
-    due_date: date
+    file_id: str  # UUID as string
+    date: Date
     confidence: Optional[int] = None
     description: str
 
 class AssignmentUpdate(BaseModel):
-    due_date: Optional[date] = None
+    date: Optional[Date] = None
     confidence: Optional[int] = None
     description: Optional[str] = None
 
 class AssignmentResponse(BaseModel):
     id: int
-    file_id: int
-    due_date: date
-    due_time: Optional[time] = None
+    file_id: str  # UUID as string
+    date: Date
+    time_due: Optional[time] = None
     confidence: Optional[int] = None
     description: str
     created_at: datetime
@@ -55,7 +56,7 @@ async def create_assignment(
         # Create new assignment
         new_assignment = Assignment(
             file_id=assignment_data.file_id,
-            due_date=assignment_data.due_date,
+            date=assignment_data.date,
             confidence=assignment_data.confidence,
             description=assignment_data.description
         )
@@ -65,7 +66,20 @@ async def create_assignment(
         db.refresh(new_assignment)
         
         logger.info(f"New assignment created for file {assignment_data.file_id}")
-        return new_assignment
+        
+        # Convert UUID object to string for Pydantic response
+        assignment_dict = {
+            "id": new_assignment.id,
+            "file_id": str(new_assignment.file_id),  # Convert UUID to string
+            "date": new_assignment.date,
+            "time_due": new_assignment.time_due,
+            "confidence": new_assignment.confidence,
+            "description": new_assignment.description,
+            "created_at": new_assignment.created_at,
+            "updated_at": new_assignment.updated_at
+        }
+        
+        return assignment_dict
         
     except HTTPException:
         raise
@@ -76,7 +90,7 @@ async def create_assignment(
 
 @router.get("/", response_model=List[AssignmentResponse])
 async def list_assignments(
-    file_id: int = None,
+    file_id: str = None,
     db: Session = Depends(get_db)
 ):
     """List assignments with optional filtering"""
@@ -84,9 +98,13 @@ async def list_assignments(
         query = db.query(Assignment)
         
         if file_id:
-            query = query.filter(Assignment.file_id == file_id)
+            try:
+                file_uuid = uuid.UUID(file_id)
+                query = query.filter(Assignment.file_id == file_uuid)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid file ID format")
         
-        assignments = query.order_by(Assignment.due_date).all()
+        assignments = query.order_by(Assignment.date).all()
         return assignments
         
     except Exception as e:
@@ -103,7 +121,20 @@ async def get_assignment(
         assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
         if not assignment:
             raise HTTPException(status_code=404, detail="Assignment not found")
-        return assignment
+        
+        # Convert UUID object to string for Pydantic response
+        assignment_dict = {
+            "id": assignment.id,
+            "file_id": str(assignment.file_id),  # Convert UUID to string
+            "date": assignment.date,
+            "time_due": assignment.time_due,
+            "confidence": assignment.confidence,
+            "description": assignment.description,
+            "created_at": assignment.created_at,
+            "updated_at": assignment.updated_at
+        }
+        
+        return assignment_dict
         
     except HTTPException:
         raise
@@ -113,13 +144,35 @@ async def get_assignment(
 
 @router.get("/file/{file_id}", response_model=List[AssignmentResponse])
 async def get_assignments_by_file(
-    file_id: int,
+    file_id: str,
     db: Session = Depends(get_db)
 ):
     """Get all assignments for a specific file"""
     try:
-        assignments = db.query(Assignment).filter(Assignment.file_id == file_id).order_by(Assignment.due_date).all()
-        return assignments
+        # Validate UUID format
+        try:
+            file_uuid = uuid.UUID(file_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid file ID format")
+        
+        assignments = db.query(Assignment).filter(Assignment.file_id == file_uuid).order_by(Assignment.date).all()
+        
+        # Convert UUID objects to strings for Pydantic response
+        assignment_responses = []
+        for assignment in assignments:
+            assignment_dict = {
+                "id": assignment.id,
+                "file_id": str(assignment.file_id),  # Convert UUID to string
+                "date": assignment.date,
+                "time_due": assignment.time_due,
+                "confidence": assignment.confidence,
+                "description": assignment.description,
+                "created_at": assignment.created_at,
+                "updated_at": assignment.updated_at
+            }
+            assignment_responses.append(assignment_dict)
+        
+        return assignment_responses
         
     except Exception as e:
         logger.error(f"Error getting assignments for file {file_id}: {e}")
@@ -138,8 +191,8 @@ async def update_assignment(
             raise HTTPException(status_code=404, detail="Assignment not found")
         
         # Update fields if provided
-        if assignment_data.due_date is not None:
-            assignment.due_date = assignment_data.due_date
+        if assignment_data.date is not None:
+            assignment.date = assignment_data.date
         if assignment_data.confidence is not None:
             assignment.confidence = assignment_data.confidence
         if assignment_data.description is not None:
@@ -151,7 +204,20 @@ async def update_assignment(
         db.refresh(assignment)
         
         logger.info(f"Assignment {assignment_id} updated")
-        return assignment
+        
+        # Convert UUID object to string for Pydantic response
+        assignment_dict = {
+            "id": assignment.id,
+            "file_id": str(assignment.file_id),  # Convert UUID to string
+            "date": assignment.date,
+            "time_due": assignment.time_due,
+            "confidence": assignment.confidence,
+            "description": assignment.description,
+            "created_at": assignment.created_at,
+            "updated_at": assignment.updated_at
+        }
+        
+        return assignment_dict
         
     except HTTPException:
         raise

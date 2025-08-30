@@ -10,7 +10,7 @@ interface SyllabusViewerProps {
 }
 
 export default function SyllabusViewer({ content, pdfFile }: SyllabusViewerProps) {
-  const [viewMode, setViewMode] = useState<'pdf' | 'summary'>('pdf')
+  const [viewMode, setViewMode] = useState<'pdf' | 'summary'>(pdfFile ? 'pdf' : 'summary')
 
   // Generate PDF blob URL for viewing
   const getPdfUrl = () => {

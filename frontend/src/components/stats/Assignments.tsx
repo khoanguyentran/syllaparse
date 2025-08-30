@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from 'react'
 import { FileText, CheckCircle, Calendar, Clock, BookOpen, ChevronDown, ChevronUp } from 'lucide-react'
-import { BackendAssignment, Assignment } from '@/types'
+import { Assignment } from '@/types'
 import api from '@/utils/api'
 
 interface AssignmentsProps {
-  fileId: number | null
+  fileId: string | null
   onAssignmentSelect: (assignments: Assignment[]) => void
   selectedAssignments: Assignment[]
 }
@@ -16,7 +16,7 @@ export default function Assignments({
   onAssignmentSelect,
   selectedAssignments
 }: AssignmentsProps) {
-  const [assignments, setAssignments] = useState<BackendAssignment[]>([])
+  const [assignments, setAssignments] = useState<Assignment[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isCollapsed, setIsCollapsed] = useState(false)
@@ -76,23 +76,13 @@ export default function Assignments({
     }
   }
 
-  const handleAssignmentToggle = (assignment: BackendAssignment) => {
-    // Convert to Assignment format for selection
-    const assignmentForSelection: Assignment = {
-      id: assignment.id.toString(),
-      title: assignment.description,
-      dueDate: assignment.due_date,
-      description: assignment.description,
-      course: undefined,
-      location: undefined
-    }
-
-    const isSelected = selectedAssignments.some(a => a.id === assignmentForSelection.id)
+  const handleAssignmentToggle = (assignment: Assignment) => {
+    const isSelected = selectedAssignments.some(a => a.id === assignment.id)
     
     if (isSelected) {
-      onAssignmentSelect(selectedAssignments.filter(a => a.id !== assignmentForSelection.id))
+      onAssignmentSelect(selectedAssignments.filter(a => a.id !== assignment.id))
     } else {
-      onAssignmentSelect([...selectedAssignments, assignmentForSelection])
+      onAssignmentSelect([...selectedAssignments, assignment])
     }
   }
 
@@ -102,15 +92,7 @@ export default function Assignments({
       onAssignmentSelect([])
     } else {
       // Select all assignments
-      const allAssignments: Assignment[] = assignments.map((assignment) => ({
-        id: assignment.id.toString(),
-        title: assignment.description,
-        dueDate: assignment.due_date,
-        description: assignment.description,
-        course: undefined,
-        location: undefined
-      }))
-      onAssignmentSelect(allAssignments)
+      onAssignmentSelect([...assignments])
     }
   }
 
@@ -194,7 +176,7 @@ export default function Assignments({
           ) : (
             <div className="space-y-6 max-h-[700px] overflow-y-auto p-2">
               {assignments.map((assignment) => {
-                const isSelected = selectedAssignments.some(a => a.id === assignment.id.toString())
+                const isSelected = selectedAssignments.some(a => a.id === assignment.id)
                 
                 return (
                   <div
@@ -223,12 +205,12 @@ export default function Assignments({
                         <div className="flex items-center space-x-4 text-sm text-gray-500">
                           <div className="flex items-center space-x-1">
                             <Calendar className="w-4 h-4" />
-                            <span>Due Date: {formatDate(assignment.due_date)}</span>
+                            <span>Due Date: {formatDate(assignment.date)}</span>
                           </div>
-                          {assignment.due_time && (
+                          {assignment.time_due && (
                             <div className="flex items-center space-x-1">
                               <Clock className="w-4 h-4" />
-                              <span>Due Time: {formatTime(assignment.due_time)}</span>
+                              <span>Due Time: {formatTime(assignment.time_due)}</span>
                             </div>
                           )}
 

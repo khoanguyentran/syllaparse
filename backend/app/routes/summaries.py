@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from typing import List
 import logging
 from datetime import datetime
+import uuid
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -15,19 +16,16 @@ router = APIRouter(prefix="/summaries", tags=["summaries"])
 
 # Pydantic models
 class SummaryCreate(BaseModel):
-    file_id: int
+    file_id: str  # UUID as string
     summary: str
-    confidence: int = None
 
 class SummaryUpdate(BaseModel):
     summary: str = None
-    confidence: int = None
 
 class SummaryResponse(BaseModel):
     id: int
-    file_id: int
+    file_id: str  # UUID as string
     summary: str
-    confidence: int
     created_at: datetime
     updated_at: datetime
 
@@ -43,21 +41,26 @@ async def create_summary(
 ):
     """Create a new summary"""
     try:
+        # Validate UUID format
+        try:
+            file_uuid = uuid.UUID(summary_data.file_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid file ID format")
+        
         # Check if file exists
-        file = db.query(File).filter(File.id == summary_data.file_id).first()
+        file = db.query(File).filter(File.id == file_uuid).first()
         if not file:
             raise HTTPException(status_code=404, detail="File not found")
         
         # Check if summary already exists for this file
-        existing_summary = db.query(Summary).filter(Summary.file_id == summary_data.file_id).first()
+        existing_summary = db.query(Summary).filter(Summary.file_id == file_uuid).first()
         if existing_summary:
             raise HTTPException(status_code=400, detail="Summary already exists for this file")
         
         # Create new summary
         new_summary = Summary(
-            file_id=summary_data.file_id,
-            summary=summary_data.summary,
-            confidence=summary_data.confidence
+            file_id=file_uuid,
+            summary=summary_data.summary
         )
         
         db.add(new_summary)
@@ -65,7 +68,17 @@ async def create_summary(
         db.refresh(new_summary)
         
         logger.info(f"New summary created for file {summary_data.file_id}")
-        return new_summary
+        
+        # Convert UUID object to string for Pydantic response
+        summary_dict = {
+            "id": new_summary.id,
+            "file_id": str(new_summary.file_id),  # Convert UUID to string
+            "summary": new_summary.summary,
+            "created_at": new_summary.created_at,
+            "updated_at": new_summary.updated_at
+        }
+        
+        return summary_dict
         
     except HTTPException:
         raise
@@ -85,7 +98,16 @@ async def get_summary(
         if not summary:
             raise HTTPException(status_code=404, detail="Summary not found")
         
-        return summary
+        # Convert UUID object to string for Pydantic response
+        summary_dict = {
+            "id": summary.id,
+            "file_id": str(summary.file_id),  # Convert UUID to string
+            "summary": summary.summary,
+            "created_at": summary.created_at,
+            "updated_at": summary.updated_at
+        }
+        
+        return summary_dict
         
     except HTTPException:
         raise
@@ -95,19 +117,35 @@ async def get_summary(
 
 @router.get("/file/{file_id}", response_model=SummaryResponse)
 async def get_summary_by_file(
-    file_id: int,
+    file_id: str,
     db: Session = Depends(get_db)
 ):
     """Get summary by file ID"""
     try:
+        # Validate UUID format
+        try:
+            file_uuid = uuid.UUID(file_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid file ID format")
+        
         logger.info(f"Getting summary for file {file_id}")
-        summary = db.query(Summary).filter(Summary.file_id == file_id).first()
+        summary = db.query(Summary).filter(Summary.file_id == file_uuid).first()
         if not summary:
             logger.warning(f"No summary found for file {file_id}")
             raise HTTPException(status_code=404, detail="Summary not found for this file")
         
         logger.info(f"Summary found for file {file_id}: {summary.summary[:100]}...")
-        return summary
+        
+        # Convert UUID object to string for Pydantic response
+        summary_dict = {
+            "id": summary.id,
+            "file_id": str(summary.file_id),  # Convert UUID to string
+            "summary": summary.summary,
+            "created_at": summary.created_at,
+            "updated_at": summary.updated_at
+        }
+        
+        return summary_dict
         
     except HTTPException:
         raise
@@ -130,15 +168,23 @@ async def update_summary(
         # Update fields if provided
         if summary_data.summary is not None:
             summary.summary = summary_data.summary
-        if summary_data.confidence is not None:
-            summary.confidence = summary_data.confidence
         
         summary.updated_at = datetime.utcnow()
         db.commit()
         db.refresh(summary)
         
         logger.info(f"Summary updated: {summary_id}")
-        return summary
+        
+        # Convert UUID object to string for Pydantic response
+        summary_dict = {
+            "id": summary.id,
+            "file_id": str(summary.file_id),  # Convert UUID to string
+            "summary": summary.summary,
+            "created_at": summary.created_at,
+            "updated_at": summary.updated_at
+        }
+        
+        return summary_dict
         
     except HTTPException:
         raise

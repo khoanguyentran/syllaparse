@@ -35,3 +35,4 @@ Thumbs.db
 service-account-key.json
 .env.local
 credentials/
+cors-config.json

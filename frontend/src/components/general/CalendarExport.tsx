@@ -102,7 +102,7 @@ export default function CalendarExport({
 
     // Create events for selected assignments
     selectedAssignments.forEach(assignment => {
-      const dueDate = new Date(assignment.dueDate)
+      const dueDate = new Date(assignment.date)
       const eventStart = new Date(dueDate)
       eventStart.setHours(9, 0, 0, 0) // Set to 9 AM on due date
       
@@ -110,8 +110,8 @@ export default function CalendarExport({
       eventEnd.setHours(10, 0, 0, 0) // Set to 10 AM on due date
       
       events.push({
-        summary: `Assignment: ${assignment.title}`,
-        description: `Due: ${assignment.description || assignment.title}`,
+        summary: `Assignment: ${assignment.description}`,
+        description: `Due: ${assignment.description}`,
         start: {
           dateTime: eventStart.toISOString(),
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -120,13 +120,13 @@ export default function CalendarExport({
           dateTime: eventEnd.toISOString(),
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
         },
-        location: assignment.location || undefined
+        location: undefined
       })
     })
 
     // Create events for selected exams
     selectedExams.forEach(exam => {
-      const examDate = new Date(exam.examDate)
+      const examDate = new Date(exam.date)
       const eventStart = new Date(examDate)
       eventStart.setHours(9, 0, 0, 0) // Set to 9 AM on exam date
       
@@ -134,8 +134,8 @@ export default function CalendarExport({
       eventEnd.setHours(11, 0, 0, 0) // Set to 11 AM on exam date (2 hour duration)
       
       events.push({
-        summary: `Exam: ${exam.title}`,
-        description: `Exam: ${exam.description || exam.title}`,
+        summary: `Exam: ${exam.description}`,
+        description: `Exam: ${exam.description}`,
         start: {
           dateTime: eventStart.toISOString(),
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -144,7 +144,7 @@ export default function CalendarExport({
           dateTime: eventEnd.toISOString(),
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
         },
-        location: exam.location || undefined
+        location: undefined
       })
     })
 

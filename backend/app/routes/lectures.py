@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from typing import List
 import logging
 from datetime import datetime, date, time
+import uuid
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -15,7 +16,7 @@ router = APIRouter(prefix="/lectures", tags=["lectures"])
 
 # Pydantic models
 class LectureCreate(BaseModel):
-    file_id: int
+    file_id: str  # UUID as string
     day: int  # 0 = monday, 1 = tuesday, etc.
     start_time: time
     end_time: time
@@ -35,7 +36,7 @@ class LectureUpdate(BaseModel):
 
 class LectureResponse(BaseModel):
     id: int
-    file_id: int
+    file_id: str  # UUID as string
     day: int
     start_time: time
     end_time: time
@@ -91,7 +92,22 @@ async def create_lecture(
         db.refresh(new_lecture)
         
         logger.info(f"New lecture created for file {lecture_data.file_id}")
-        return new_lecture
+        
+        # Convert UUID object to string for Pydantic response
+        lecture_dict = {
+            "id": new_lecture.id,
+            "file_id": str(new_lecture.file_id),  # Convert UUID to string
+            "day": new_lecture.day,
+            "start_time": new_lecture.start_time,
+            "end_time": new_lecture.end_time,
+            "start_date": new_lecture.start_date,
+            "end_date": new_lecture.end_date,
+            "location": new_lecture.location,
+            "type": new_lecture.type,
+            "created_at": new_lecture.created_at
+        }
+        
+        return lecture_dict
         
     except HTTPException:
         raise
@@ -102,7 +118,7 @@ async def create_lecture(
 
 @router.get("/", response_model=List[LectureResponse])
 async def list_lectures(
-    file_id: int = None,
+    file_id: str = None,
     day: int = None,
     db: Session = Depends(get_db)
 ):
@@ -111,7 +127,12 @@ async def list_lectures(
         query = db.query(Lectures)
         
         if file_id:
-            query = query.filter(Lectures.file_id == file_id)
+            # Validate UUID format
+            try:
+                file_uuid = uuid.UUID(file_id)
+                query = query.filter(Lectures.file_id == file_uuid)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid file ID format")
         
         if day is not None:
             if not 0 <= day <= 6:
@@ -119,7 +140,25 @@ async def list_lectures(
             query = query.filter(Lectures.day == day)
         
         lectures = query.order_by(Lectures.day, Lectures.start_time).all()
-        return lectures
+        
+        # Convert UUID objects to strings for Pydantic response
+        lecture_responses = []
+        for lecture in lectures:
+            lecture_dict = {
+                "id": lecture.id,
+                "file_id": str(lecture.file_id),  # Convert UUID to string
+                "day": lecture.day,
+                "start_time": lecture.start_time,
+                "end_time": lecture.end_time,
+                "start_date": lecture.start_date,
+                "end_date": lecture.end_date,
+                "location": lecture.location,
+                "type": lecture.type,
+                "created_at": lecture.created_at
+            }
+            lecture_responses.append(lecture_dict)
+        
+        return lecture_responses
         
     except HTTPException:
         raise
@@ -138,7 +177,21 @@ async def get_lecture(
         if not lecture:
             raise HTTPException(status_code=404, detail="Lecture not found")
         
-        return lecture
+        # Convert UUID object to string for Pydantic response
+        lecture_dict = {
+            "id": lecture.id,
+            "file_id": str(lecture.file_id),  # Convert UUID to string
+            "day": lecture.day,
+            "start_time": lecture.start_time,
+            "end_time": lecture.end_time,
+            "start_date": lecture.start_date,
+            "end_date": lecture.end_date,
+            "location": lecture.location,
+            "type": lecture.type,
+            "created_at": lecture.created_at
+        }
+        
+        return lecture_dict
         
     except HTTPException:
         raise
@@ -148,13 +201,37 @@ async def get_lecture(
 
 @router.get("/file/{file_id}", response_model=List[LectureResponse])
 async def get_lectures_by_file(
-    file_id: int,
+    file_id: str,
     db: Session = Depends(get_db)
 ):
     """Get all lectures for a specific file"""
     try:
-        lectures = db.query(Lectures).filter(Lectures.file_id == file_id).order_by(Lectures.day, Lectures.start_time).all()
-        return lectures
+        # Validate UUID format
+        try:
+            file_uuid = uuid.UUID(file_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid file ID format")
+        
+        lectures = db.query(Lectures).filter(Lectures.file_id == file_uuid).order_by(Lectures.day, Lectures.start_time).all()
+        
+        # Convert UUID objects to strings for Pydantic response
+        lecture_responses = []
+        for lecture in lectures:
+            lecture_dict = {
+                "id": lecture.id,
+                "file_id": str(lecture.file_id),  # Convert UUID to string
+                "day": lecture.day,
+                "start_time": lecture.start_time,
+                "end_time": lecture.end_time,
+                "start_date": lecture.start_date,
+                "end_date": lecture.end_date,
+                "location": lecture.location,
+                "type": lecture.type,
+                "created_at": lecture.created_at
+            }
+            lecture_responses.append(lecture_dict)
+        
+        return lecture_responses
         
     except Exception as e:
         logger.error(f"Error getting lectures by file: {e}")
@@ -207,7 +284,22 @@ async def update_lecture(
         db.refresh(lecture)
         
         logger.info(f"Lecture updated: {lecture_id}")
-        return lecture
+        
+        # Convert UUID object to string for Pydantic response
+        lecture_dict = {
+            "id": lecture.id,
+            "file_id": str(lecture.file_id),  # Convert UUID to string
+            "day": lecture.day,
+            "start_time": lecture.start_time,
+            "end_time": lecture.end_time,
+            "start_date": lecture.start_date,
+            "end_date": lecture.end_date,
+            "location": lecture.location,
+            "type": lecture.type,
+            "created_at": lecture.created_at
+        }
+        
+        return lecture_dict
         
     except HTTPException:
         raise

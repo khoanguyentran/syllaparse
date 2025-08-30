@@ -5,7 +5,8 @@ from app.database.models import Exam, File
 from pydantic import BaseModel
 from typing import List, Optional
 import logging
-from datetime import datetime, date, time
+from datetime import datetime, date as Date, time
+import uuid
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -15,21 +16,21 @@ router = APIRouter(prefix="/exams", tags=["exams"])
 
 # Pydantic models for Exams
 class ExamCreate(BaseModel):
-    file_id: int
-    exam_date: date
+    file_id: str  # UUID as string
+    date: Date
     confidence: Optional[int] = None
     description: str
 
 class ExamUpdate(BaseModel):
-    exam_date: Optional[date] = None
+    date: Optional[Date] = None
     confidence: Optional[int] = None
     description: Optional[str] = None
 
 class ExamResponse(BaseModel):
     id: int
-    file_id: int
-    exam_date: date
-    exam_time: Optional[time] = None
+    file_id: str  # UUID as string
+    date: Date
+    time_due: Optional[time] = None
     confidence: Optional[int] = None
     description: str
     created_at: datetime
@@ -55,7 +56,7 @@ async def create_exam(
         # Create new exam
         new_exam = Exam(
             file_id=exam_data.file_id,
-            exam_date=exam_data.exam_date,
+            date=exam_data.date,
             confidence=exam_data.confidence,
             description=exam_data.description
         )
@@ -65,7 +66,20 @@ async def create_exam(
         db.refresh(new_exam)
         
         logger.info(f"New exam created for file {exam_data.file_id}")
-        return new_exam
+        
+        # Convert UUID object to string for Pydantic response
+        exam_dict = {
+            "id": new_exam.id,
+            "file_id": str(new_exam.file_id),  # Convert UUID to string
+            "date": new_exam.date,
+            "time_due": new_exam.time_due,
+            "confidence": new_exam.confidence,
+            "description": new_exam.description,
+            "created_at": new_exam.created_at,
+            "updated_at": new_exam.updated_at
+        }
+        
+        return exam_dict
         
     except HTTPException:
         raise
@@ -86,7 +100,7 @@ async def list_exams(
         if file_id:
             query = query.filter(Exam.file_id == file_id)
         
-        exams = query.order_by(Exam.exam_date).all()
+        exams = query.order_by(Exam.date).all()
         return exams
         
     except Exception as e:
@@ -103,7 +117,20 @@ async def get_exam(
         exam = db.query(Exam).filter(Exam.id == exam_id).first()
         if not exam:
             raise HTTPException(status_code=404, detail="Exam not found")
-        return exam
+        
+        # Convert UUID object to string for Pydantic response
+        exam_dict = {
+            "id": exam.id,
+            "file_id": str(exam.file_id),  # Convert UUID to string
+            "date": exam.date,
+            "time_due": exam.time_due,
+            "confidence": exam.confidence,
+            "description": exam.description,
+            "created_at": exam.created_at,
+            "updated_at": exam.updated_at
+        }
+        
+        return exam_dict
         
     except HTTPException:
         raise
@@ -113,13 +140,35 @@ async def get_exam(
 
 @router.get("/file/{file_id}", response_model=List[ExamResponse])
 async def get_exams_by_file(
-    file_id: int,
+    file_id: str,
     db: Session = Depends(get_db)
 ):
     """Get all exams for a specific file"""
     try:
-        exams = db.query(Exam).filter(Exam.file_id == file_id).order_by(Exam.exam_date).all()
-        return exams
+        # Validate UUID format
+        try:
+            file_uuid = uuid.UUID(file_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid file ID format")
+        
+        exams = db.query(Exam).filter(Exam.file_id == file_uuid).order_by(Exam.date).all()
+        
+        # Convert UUID objects to strings for Pydantic response
+        exam_responses = []
+        for exam in exams:
+            exam_dict = {
+                "id": exam.id,
+                "file_id": str(exam.file_id),  # Convert UUID to string
+                "date": exam.date,
+                "time_due": exam.time_due,
+                "confidence": exam.confidence,
+                "description": exam.description,
+                "created_at": exam.created_at,
+                "updated_at": exam.updated_at
+            }
+            exam_responses.append(exam_dict)
+        
+        return exam_responses
         
     except Exception as e:
         logger.error(f"Error getting exams for file {file_id}: {e}")
@@ -138,8 +187,8 @@ async def update_exam(
             raise HTTPException(status_code=404, detail="Exam not found")
         
         # Update fields if provided
-        if exam_data.exam_date is not None:
-            exam.exam_date = exam_data.exam_date
+        if exam_data.date is not None:
+            exam.date = exam_data.date
         if exam_data.confidence is not None:
             exam.confidence = exam_data.confidence
         if exam_data.description is not None:
@@ -151,7 +200,20 @@ async def update_exam(
         db.refresh(exam)
         
         logger.info(f"Exam {exam_id} updated")
-        return exam
+        
+        # Convert UUID object to string for Pydantic response
+        exam_dict = {
+            "id": exam.id,
+            "file_id": str(exam.file_id),  # Convert UUID to string
+            "date": exam.date,
+            "time_due": exam.time_due,
+            "confidence": exam.confidence,
+            "description": exam.description,
+            "created_at": exam.created_at,
+            "updated_at": exam.updated_at
+        }
+        
+        return exam_dict
         
     except HTTPException:
         raise

@@ -82,71 +82,29 @@ class Parser:
         if not self.openai_key:
             return {"error": "OpenAI API key not configured"}
         
-        prompt = f"""
-            ## GOAL
-            Parse a university syllabus document to extract structured information about course schedules, assignments, exams, grading policies, and overall course summary. Transform unstructured syllabus text into organized, machine-readable data with confidence scores.
+        prompt = f"""Extract structured data from this syllabus:
 
-            ## RETURN FORMAT
-            You must return data that matches the SyllabusData schema with these components:
-            - course_name: Full course title and number
-            - instructor: Professor's name and contact info
-            - summary: A paragraph of the course description covering course code, professor's name, topics, objectives, prerequisites, and other relevant information
-            - lectures: Array of meeting times with day (0-6), start_time, end_time, dates, location, type
-            - assignments: Array with description (assignment name and number only), parsed_date, parsed_time, confidence
-            - exams: Array with description, parsed_date, parsed_time, confidence  
-            - grading: Object with categories array (name, weight, description) and confidence
+REQUIRED FIELDS:
+- course_name: Course title and number
+- instructor: Professor name and contact  
+- summary: Course description paragraph (topics, objectives, prerequisites)
+- lectures: [{{"day": 0-6, "start_time": "HH:MM", "end_time": "HH:MM", "start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD", "location": "string", "type": "lecture/lab/discussion"}}]
+- assignments: [{{"description": "Assignment name only", "date": "YYYY-MM-DD" or "Not Listed", "time_due": "HH:MM or Not Listed", "confidence": 0-100}}]
+- exams: [{{"description": "Exam name", "date": "YYYY-MM-DD" or "Not Listed", "time_due": "HH:MM or Not Listed", "confidence": 0-100}}]
+- grading: {{"categories": [{{"name": "string", "weight": float, "description": "string"}}], "confidence": 0-100}}
 
-            ## WARNINGS AND CONSTRAINTS
-            CRITICAL - Follow these rules strictly:
-            - NEVER guess dates, times, or locations - use confidence=50 for uncertain information
-            - Day numbers: 0=Monday, 1=Tuesday, 2=Wednesday, 3=Thursday, 4=Friday, 5=Saturday, 6=Sunday
-            - Time format: 24-hour "HH:MM" (e.g., "14:30" not "2:30 PM")
-            - Date format: "YYYY-MM-DD" only
-            - parsed_time for assignments/exams: Use "HH:MM" format if due time is specified, empty string "" if only date is given
-            - Confidence scores: 85=confident, 70=somewhat confident, 50=uncertain
-            - Default lecture type to "lecture" if unclear
-            - Date pattern handling: If specific dates aren't listed and only days of the week and times are provided:
-              * Fall semester classes: repeat on those days every week for August, September, October, November, December
-              * Spring semester classes: repeat on those days every week for January, February, March, April, May
+RULES:
+- Days: 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun
+- Times: 24-hour format "HH:MM" or "Not Listed" if not listed
+- Dates: "YYYY-MM-DD" format or "Not Listed" if not listed
+- Confidence: 85=confident, 70=somewhat confident, 50=uncertain
+- Assignment descriptions: Keep brief ("Assignment 1", not full instructions)
+- NEVER guess dates/times - return "Not Listed" if you are not sure (confidence <= 70)
+- If there aren't specific dates, if the syllabus says Fall then use August 20th as the start date and December 20th as the end date. 
+If the syllabus says Spring then use January 20th as the start date and May 15th as the end date.
 
-            ## CONTEXT AND EXAMPLES
-            Lecture Type Classification:
-            - "lecture": Regular class sessions, main course meetings, instructor presentations
-            - "lab": Laboratory sessions, computer labs, studio time
-            - "discussion": Discussion sections, recitations, seminars
-
-            Classification Examples:
-            - "Class meets MWF 9:00-10:30" → type: "lecture"
-            - "Lab sessions Tuesdays 2:00-5:00" → type: "lab"  
-            - "Discussion sections Thursdays 3:00-4:00" → type: "discussion"
-            - "Recitation Fridays 1:00-2:00" → type: "discussion"
-            - "Studio time Wednesdays 6:00-9:00" → type: "lab"
-
-            Course Summary Guidelines:
-            Extract a paragraph description that includes:
-            - Course code and number
-            - Professors name and contact info
-            - Main course topics and subject matter
-            - Learning objectives or goals
-            - Grading policies and late submission policies
-            - Grading scale (e.g. A+ is 90-100, A is 80-89, etc.)
-            - Prerequisites or required background
-            Look for sections like: "Course Description", "Overview", "Introduction", "About this Course", "Learning Objectives"
-
-            Assignment Description Guidelines:
-            Keep assignment descriptions concise with ONLY the name and number:
-            - "Assignment 1" not "Assignment 1 (detailed instructions about submission via GitHub...)"
-            - "Lab Assignment 2" not "Lab Assignment 2 (part of 4 incremental RTL lab assignments). Code submitted via GitHub; lab report (PDF...)"
-            - "Weekly Quiz 3" not "Weekly online quizzes (timed, typically on Mondays, ≤20 minutes). Lowest quiz score dropped..."
-            - "Project Proposal" not "Project Proposal - Submit a 2-page proposal outlining your final project idea..."
-            
-            Grading Information Sources:
-            Look for these section headers: "Grading", "Grade Distribution", "Assessment", "Evaluation", "Weights"
-            Common categories: Assignments, Homework, Projects, Exams, Midterm, Final, Participation, Attendance, Quizzes, Lab Work
-
-            ## SYLLABUS TEXT TO ANALYZE
-            {text}
-        """
+SYLLABUS:
+{text}"""
         
         return await self._run_llm(prompt)
     
@@ -158,7 +116,7 @@ class Parser:
             response = client.beta.chat.completions.parse(
                 model=DEFAULT_MODEL,
                 messages=[
-                    {"role": "system", "content": "You are a professor with 20+ years of experience creating syllabi. You understand all syllabi terminology and can perfectly understand other professor's syllabi."},
+                    {"role": "system", "content": "You are a university professor with 20+ years of experience creating syllabi. You understand all syllabi terminology and can perfectly understand other professor's syllabi."},
                     {"role": "user", "content": prompt}
                 ],
                 response_format=SyllabusData,

@@ -12,19 +12,19 @@ class Lecture(BaseModel):
 
 class Assignment(BaseModel):
     description: str
-    parsed_date: str  # YYYY-MM-DD format
-    parsed_time: str  # HH:MM format (24-hour), optional time if specified
+    date: str  # YYYY-MM-DD format or "Not Listed" if not listed
+    time_due: str  # HH:MM format (24-hour) or "Not Listed" if not listed
     confidence: int  # 0-100
 
 class Exam(BaseModel):
     description: str
-    parsed_date: str  # YYYY-MM-DD format
-    parsed_time: str  # HH:MM format (24-hour), optional time if specified
+    date: str  # YYYY-MM-DD format or "Not Listed" if not listed
+    time_due: str  # HH:MM format (24-hour) or "Not Listed" if not listed
     confidence: int  # 0-100
 
 class GradingCategory(BaseModel):
     name: str
-    weight: float  # percentage 0.0-100.0
+    weight: float  
     description: str
 
 class Grading(BaseModel):

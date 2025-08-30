@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from 'react'
 import { FileText, CheckCircle, Calendar, Clock, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react'
-import { BackendExam, Exam } from '@/types'
+import { Exam } from '@/types'
 import api from '@/utils/api'
 
 interface ExamsProps {
-  fileId: number | null
+  fileId: string | null
   onExamSelect: (exams: Exam[]) => void
   selectedExams: Exam[]
 }
@@ -16,7 +16,7 @@ export default function Exams({
   onExamSelect,
   selectedExams
 }: ExamsProps) {
-  const [exams, setExams] = useState<BackendExam[]>([])
+  const [exams, setExams] = useState<Exam[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isCollapsed, setIsCollapsed] = useState(false)
@@ -78,23 +78,13 @@ export default function Exams({
     }
   }
 
-  const handleExamToggle = (exam: BackendExam) => {
-    // Convert to Exam format for selection
-    const examForSelection: Exam = {
-      id: exam.id.toString(),
-      title: exam.description,
-      examDate: exam.exam_date,
-      description: exam.description,
-      course: undefined,
-      location: undefined
-    }
-
-    const isSelected = selectedExams.some(e => e.id === examForSelection.id)
+  const handleExamToggle = (exam: Exam) => {
+    const isSelected = selectedExams.some(e => e.id === exam.id)
     
     if (isSelected) {
-      onExamSelect(selectedExams.filter(e => e.id !== examForSelection.id))
+      onExamSelect(selectedExams.filter(e => e.id !== exam.id))
     } else {
-      onExamSelect([...selectedExams, examForSelection])
+      onExamSelect([...selectedExams, exam])
     }
   }
 
@@ -104,15 +94,7 @@ export default function Exams({
       onExamSelect([])
     } else {
       // Select all exams
-      const allExams: Exam[] = exams.map((exam) => ({
-        id: exam.id.toString(),
-        title: exam.description,
-        examDate: exam.exam_date,
-        description: exam.description,
-        course: undefined,
-        location: undefined
-      }))
-      onExamSelect(allExams)
+      onExamSelect([...exams])
     }
   }
 
@@ -196,7 +178,7 @@ export default function Exams({
           ) : (
             <div className="space-y-6 p-2">
               {exams.map((exam) => {
-                const isSelected = selectedExams.some(e => e.id === exam.id.toString())
+                const isSelected = selectedExams.some(e => e.id === exam.id)
                 
                 return (
                   <div
@@ -225,12 +207,12 @@ export default function Exams({
                         <div className="flex items-center space-x-4 text-sm text-gray-500">
                           <div className="flex items-center space-x-1">
                             <Calendar className="w-4 h-4" />
-                            <span>Exam Date: {formatDate(exam.exam_date)}</span>
+                            <span>Exam Date: {formatDate(exam.date)}</span>
                           </div>
-                          {exam.exam_time && (
+                          {exam.time_due && (
                             <div className="flex items-center space-x-1">
                               <Clock className="w-4 h-4" />
-                              <span>Exam Time: {formatTime(exam.exam_time)}</span>
+                              <span>Exam Time: {formatTime(exam.time_due)}</span>
                             </div>
                           )}
 

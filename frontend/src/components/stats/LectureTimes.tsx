@@ -6,7 +6,7 @@ import { Lecture } from '@/types'
 import api from '@/utils/api'
 
 interface LectureTimesProps {
-  fileId: number | null
+  fileId: string | null
   onLectureSelect: (lectures: Lecture[]) => void
   selectedLectures: Lecture[]
 }

@@ -2,7 +2,6 @@
 
 import React, { useCallback, useState, useEffect } from 'react'
 import { useGoogleLogin } from '@react-oauth/google'
-import Image from 'next/image'
 import { FcGoogle } from 'react-icons/fc'
 import { api } from '@/utils/api'
 import { saveSession, loadSession, clearSession, GoogleUser } from '@/utils/session'
@@ -17,7 +16,7 @@ export default function GoogleSignIn({ onGoogleIdChange }: GoogleSignInProps) {
   const [isSignedIn, setIsSignedIn] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [imageError, setImageError] = useState(false)
-  const [useProxy, setUseProxy] = useState(false)
+
   const [imageLoading, setImageLoading] = useState(false)
   const [isInitialized, setIsInitialized] = useState(false)
 
@@ -99,6 +98,8 @@ export default function GoogleSignIn({ onGoogleIdChange }: GoogleSignInProps) {
         throw new Error('Incomplete user data from Google')
       }
 
+      console.log('Setting user data:', googleUser)
+      console.log('User picture URL:', googleUser.picture)
       setUser(googleUser)
       setGoogleId(googleUser.id)
       setIsSignedIn(true)
@@ -165,7 +166,6 @@ export default function GoogleSignIn({ onGoogleIdChange }: GoogleSignInProps) {
     setIsSignedIn(false)
     setError(null)
     setImageError(false)
-    setUseProxy(false)
     setImageLoading(false)
     
     // Clear session from localStorage
@@ -178,19 +178,13 @@ export default function GoogleSignIn({ onGoogleIdChange }: GoogleSignInProps) {
     onGoogleIdChange(null)
   }
 
-  const handleImageError = () => {
-    if (!useProxy) {
-      setUseProxy(true)
-      setImageLoading(true)
-    } else {
-      setImageError(true)
-      setImageLoading(false)
-    }
+  const handleImageError = (e) => {
+    setImageError(true)
+    setImageLoading(false)
   }
 
   const handleImageLoad = () => {
     setImageError(false)
-    setUseProxy(false)
     setImageLoading(false)
   }
 
@@ -200,7 +194,6 @@ export default function GoogleSignIn({ onGoogleIdChange }: GoogleSignInProps) {
 
   const retryImageLoad = () => {
     setImageError(false)
-    setUseProxy(false)
     setImageLoading(false)
   }
 
@@ -218,17 +211,13 @@ export default function GoogleSignIn({ onGoogleIdChange }: GoogleSignInProps) {
   }
 
   const getImageSrc = () => {
-    if (!user?.picture) return null
-    
-    if (useProxy) {
-      const proxyUrl = `/api/profile-picture/?url=${encodeURIComponent(user.picture)}`
-      return proxyUrl
+    if (!user?.picture) {
+      return null
     }
     
     return user.picture
   }
 
-  // Don't render anything until we've checked for existing sessions
   if (!isInitialized) {
     return null // This prevents any flash of content
   }
@@ -258,19 +247,17 @@ export default function GoogleSignIn({ onGoogleIdChange }: GoogleSignInProps) {
                       <div className="w-2.5 h-2.5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
                     </div>
                   )}
-                  <Image
+                  <img
                     src={getImageSrc() || ''}
                     alt={`${user.name}'s profile`}
-                    width={40}
-                    height={40}
                     className={`w-full h-full object-cover transition-opacity duration-300 ${
                       imageLoading ? 'opacity-0' : 'opacity-100'
                     }`}
                     onLoad={handleImageLoad}
                     onError={handleImageError}
                     onLoadStart={handleImageStartLoad}
-                    unoptimized={true}
-                    priority={true}
+                    crossOrigin="anonymous"
+                    referrerPolicy="no-referrer"
                   />
                 </div>
               ) : (

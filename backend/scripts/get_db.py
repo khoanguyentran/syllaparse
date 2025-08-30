@@ -112,7 +112,7 @@ def check_summaries(engine):
                 print(f"   ID: {summary[0]}")
                 print(f"   File ID: {summary[1]}")
                 print(f"   Summary: {summary[2][:100]}..." if len(str(summary[2])) > 100 else f"   Summary: {summary[2]}")
-                print(f"   Confidence: {summary[3]}")
+                print(f"   Grading Breakdown: {summary[3]}")
                 print(f"   Created: {summary[4]}")
                 print(f"   Updated: {summary[5]}")
                 print("   ---")
@@ -137,11 +137,12 @@ def check_assignments(engine):
             for assignment in assignments:
                 print(f"   ID: {assignment[0]}")
                 print(f"   File ID: {assignment[1]}")
-                print(f"   Due Date: {assignment[2]}")
-                print(f"   Confidence: {assignment[3]}")
-                print(f"   Created: {assignment[4]}")
-                print(f"   Updated: {assignment[5]}")
-                print(f"   Description: {assignment[6]}")
+                print(f"   Date: {assignment[2]}")
+                print(f"   Time Due: {assignment[3]}")
+                print(f"   Confidence: {assignment[4]}")
+                print(f"   Created: {assignment[5]}")
+                print(f"   Updated: {assignment[6]}")
+                print(f"   Description: {assignment[7]}")
                 print("   ---")
                 
     except Exception as e:
@@ -164,11 +165,12 @@ def check_exams(engine):
             for exam in exams:
                 print(f"   ID: {exam[0]}")
                 print(f"   File ID: {exam[1]}")
-                print(f"   Exam Date: {exam[2]}")
-                print(f"   Confidence: {exam[3]}")
-                print(f"   Created: {exam[4]}")
-                print(f"   Updated: {exam[5]}")
-                print(f"   Description: {exam[6]}")
+                print(f"   Date: {exam[2]}")
+                print(f"   Time Due: {exam[3]}")
+                print(f"   Confidence: {exam[4]}")
+                print(f"   Created: {exam[5]}")
+                print(f"   Updated: {exam[6]}")
+                print(f"   Description: {exam[7]}")
                 print("   ---")
                 
     except Exception as e:

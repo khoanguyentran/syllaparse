@@ -4,9 +4,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.database.db import get_db
 from app.database.models import File as FileModel, User
-from app.processing.routes import trigger_parsing_for_file
+from app.processing.routes import _start_parsing
 from pydantic import BaseModel
 import logging
+import uuid
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -16,17 +17,17 @@ router = APIRouter(prefix="/files", tags=["files"])
 
 # Pydantic models for request/response
 class FileUploadRequest(BaseModel):
-    google_id: str  # Frontend sends Google ID
+    google_id: str  
     filename: str
-    filepath: str  # Complete GCS public URL
+    filepath: str  
     file_size: int
     content_type: str
 
 class FileUploadResponse(BaseModel):
     message: str
-    file_id: int
+    file_id: str  # UUID as string
     filename: str
-    filepath: str  # Complete GCS public URL
+    filepath: str  
     upload_date: str
 
 @router.post("/upload", response_model=FileUploadResponse)
@@ -56,7 +57,7 @@ async def upload_file(
         
         # Trigger parsing in the background
         try:
-            await trigger_parsing_for_file(db_file.id, background_tasks, db)
+            await _start_parsing(str(db_file.id), background_tasks, db)
             logger.info(f"Parsing triggered for file {db_file.id}")
         except Exception as parse_error:
             logger.warning(f"Failed to trigger parsing for file {db_file.id}: {parse_error}")
@@ -64,9 +65,9 @@ async def upload_file(
         
         return FileUploadResponse(
             message="File metadata stored successfully and parsing initiated",
-            file_id=db_file.id,
+            file_id=str(db_file.id), 
             filename=db_file.filename,
-            filepath=db_file.file_path,  # Complete GCS public URL
+            filepath=db_file.file_path, 
             upload_date=db_file.upload_date.isoformat()
         )
         
@@ -76,7 +77,7 @@ async def upload_file(
 
 @router.delete("/{file_id}")
 async def delete_file(
-    file_id: int,
+    file_id: str,
     db: Session = Depends(get_db)
 ):
     """
@@ -84,8 +85,14 @@ async def delete_file(
     Note: Actual file deletion from GCS should be handled by Next.js frontend
     """
     try:
+        # Validate UUID format
+        try:
+            file_uuid = uuid.UUID(file_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid file ID format")
+        
         # Get file from database
-        db_file = db.query(FileModel).filter(FileModel.id == file_id).first()
+        db_file = db.query(FileModel).filter(FileModel.id == file_uuid).first()
         if not db_file:
             raise HTTPException(status_code=404, detail="File not found")
         
@@ -104,21 +111,27 @@ async def delete_file(
 
 @router.get("/{file_id}")
 async def get_file(
-    file_id: int,
+    file_id: str,
     db: Session = Depends(get_db)
 ):
     """
     Get file information from database
     """
     try:
+        # Validate UUID format
+        try:
+            file_uuid = uuid.UUID(file_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid file ID format")
+        
         # Get file from database
-        db_file = db.query(FileModel).filter(FileModel.id == file_id).first()
+        db_file = db.query(FileModel).filter(FileModel.id == file_uuid).first()
         if not db_file:
             raise HTTPException(status_code=404, detail="File not found")
         
         # Use stored public URL directly
         return {
-            "file_id": db_file.id,
+            "file_id": str(db_file.id), 
             "filename": db_file.filename,
             "upload_date": db_file.upload_date.isoformat(),
             "filepath": db_file.file_path,  # Complete GCS public URL
@@ -162,7 +175,7 @@ async def list_user_files(
         files = []
         for db_file in db_files:
             files.append({
-                "file_id": db_file.id,
+                "file_id": str(db_file.id), 
                 "filename": db_file.filename,
                 "upload_date": db_file.upload_date.isoformat(),
                 "filepath": db_file.file_path,  # Complete GCS public URL

@@ -49,7 +49,7 @@ export const getDueStatus = (dueDate: string) => {
 
 export const sortAssignmentsByDate = (assignments: Assignment[]) => {
   return [...assignments].sort((a, b) => 
-    parseISO(a.dueDate).getTime() - parseISO(b.dueDate).getTime()
+    parseISO(a.date).getTime() - parseISO(b.date).getTime()
   )
 }
 
@@ -61,13 +61,11 @@ export const filterAssignments = (
   }
 ) => {
   return assignments.filter(assignment => {
-    if (filters.course && assignment.course !== filters.course) return false
+    // Note: course field removed from Assignment interface
     if (filters.searchQuery) {
       const query = filters.searchQuery.toLowerCase()
       const matches = 
-        assignment.title.toLowerCase().includes(query) ||
-        assignment.description?.toLowerCase().includes(query) ||
-        assignment.course?.toLowerCase().includes(query)
+        assignment.description.toLowerCase().includes(query)
       if (!matches) return false
     }
     return true
@@ -79,7 +77,7 @@ export const getUpcomingAssignments = (assignments: Assignment[], days: number =
   const futureDate = addDays(now, days)
   
   return assignments.filter(assignment => {
-    const dueDate = parseISO(assignment.dueDate)
+    const dueDate = parseISO(assignment.date)
     return isAfter(dueDate, now) && isBefore(dueDate, futureDate)
   })
 }
@@ -87,6 +85,6 @@ export const getUpcomingAssignments = (assignments: Assignment[], days: number =
 export const getOverdueAssignments = (assignments: Assignment[]) => {
   const now = new Date()
   return assignments.filter(assignment => 
-    isAfter(now, parseISO(assignment.dueDate))
+    isAfter(now, parseISO(assignment.date))
   )
 }

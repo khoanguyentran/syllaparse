@@ -9,22 +9,22 @@ from datetime import time, date
 import asyncio
 import json
 import os
+import uuid
 
 import logging
 
 router = APIRouter(prefix="/processing", tags=["processing"])
 
-# In-memory status tracking (simple replacement for Redis)
 _parsing_status = {}
 
-def _status_key(file_id: int) -> str:
+def _status_key(file_id: str) -> str:
     return f"parse_status:{file_id}"
 
-def _get_status(file_id: int) -> dict:
+def _get_status(file_id: str) -> dict:
     """Get parsing status from memory"""
     return _parsing_status.get(_status_key(file_id), {})
 
-def _set_status(file_id: int, status: str, progress: int, message: str):
+def _set_status(file_id: str, status: str, progress: int, message: str):
     """Set parsing status in memory"""
     _parsing_status[_status_key(file_id)] = {
         "status": status,
@@ -32,26 +32,16 @@ def _set_status(file_id: int, status: str, progress: int, message: str):
         "message": message
     }
 
-@router.post("/parse/{file_id}")
-async def parse_syllabus(file_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    """Runs parsing and reports status in memory."""
+async def _start_parsing(file_id: str, background_tasks: BackgroundTasks, db: Session) -> bool:
+    """Core parsing logic"""
+    # Validate UUID format
+    try:
+        file_uuid = uuid.UUID(file_id)
+    except ValueError:
+        return False
+    
     # Validate file exists
-    file = db.query(File).filter(File.id == file_id).first()
-    if not file:
-        raise HTTPException(status_code=404, detail="File not found")
-
-    # Initialize status
-    _set_status(file_id, "queued", 0, "Queued for parsing")
-
-    # Launch background task
-    background_tasks.add_task(_run_parse_and_store, file_id)
-
-    return {"status": "processing", "file_id": file_id}
-
-async def trigger_parsing_for_file(file_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    """Helper function to trigger parsing for a file (used by other routes)"""
-    # Validate file exists
-    file = db.query(File).filter(File.id == file_id).first()
+    file = db.query(File).filter(File.id == file_uuid).first()
     if not file:
         return False
 
@@ -62,7 +52,16 @@ async def trigger_parsing_for_file(file_id: int, background_tasks: BackgroundTas
     background_tasks.add_task(_run_parse_and_store, file_id)
     return True
 
-def _run_parse_and_store(file_id: int) -> None:
+@router.post("/parse/{file_id}")
+async def parse_syllabus(file_id: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """Runs parsing and reports status in memory."""
+    success = await _start_parsing(file_id, background_tasks, db)
+    if not success:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    return {"status": "processing", "file_id": file_id}
+
+def _run_parse_and_store(file_id: str) -> None:
     """Parses file, stores to DB, and updates status."""
     logger = logging.getLogger(__name__)
     logger.info(f"Starting parse and store for file {file_id}")
@@ -78,7 +77,8 @@ def _run_parse_and_store(file_id: int) -> None:
         try:
             SessionLocal = get_session_local()
             check_db = SessionLocal()
-            file_exists = check_db.query(File).filter(File.id == file_id).first() is not None
+            file_uuid = uuid.UUID(file_id)
+            file_exists = check_db.query(File).filter(File.id == file_uuid).first() is not None
             check_db.close()
             return not file_exists
         except Exception:
@@ -93,7 +93,8 @@ def _run_parse_and_store(file_id: int) -> None:
             logger.info(f"Parsing cancelled for file {file_id}")
             return
             
-        file = db.query(File).filter(File.id == file_id).first()
+        file_uuid = uuid.UUID(file_id)
+        file = db.query(File).filter(File.id == file_uuid).first()
         if not file:
             logger.error(f"File {file_id} not found in database")
             set_status("failed", 100, "File not found")
@@ -124,26 +125,25 @@ def _run_parse_and_store(file_id: int) -> None:
         set_status("saving", 60, "Saving parsed data")
 
         # Summary
-        if parsed_data.get("course_name") or parsed_data.get("instructor"):
-            summary_text = f"Course: {parsed_data.get('course_name', 'N/A')}\nInstructor: {parsed_data.get('instructor', 'N/A')}"
-            grading_breakdown = parsed_data.get("grading")  # Get grading data
+        ai_summary = parsed_data.get("summary")
+        if ai_summary:
+            grading_breakdown = parsed_data.get("grading")
             
-            existing_summary = db.query(Summary).filter(Summary.file_id == file_id).first()
+            existing_summary = db.query(Summary).filter(Summary.file_id == file_uuid).first()
             if existing_summary:
-                existing_summary.summary = summary_text
+                existing_summary.summary = ai_summary
                 existing_summary.grading_breakdown = grading_breakdown
                 existing_summary.updated_at = func.now()
             else:
                 db.add(Summary(
-                    file_id=file_id, 
-                    summary=summary_text, 
+                    file_id=file_uuid, 
+                    summary=ai_summary, 
                     grading_breakdown=grading_breakdown,
-                    confidence=85
                 ))
 
         # Lectures
         if parsed_data.get("lectures"):
-            db.query(Lectures).filter(Lectures.file_id == file_id).delete()
+            db.query(Lectures).filter(Lectures.file_id == file_uuid).delete()
             for lecture_data in parsed_data["lectures"]:
                 try:
                     day = lecture_data.get("day")
@@ -155,7 +155,7 @@ def _run_parse_and_store(file_id: int) -> None:
                     start_date = _parse_date(lecture_data.get("start_date", "2024-01-15"))
                     end_date = _parse_date(lecture_data.get("end_date", "2024-05-15"))
                     db.add(Lectures(
-                        file_id=file_id,
+                        file_id=file_uuid,
                         day=day,
                         start_time=start_time,
                         end_time=end_time,
@@ -169,49 +169,46 @@ def _run_parse_and_store(file_id: int) -> None:
 
         # Assignments
         if parsed_data.get("assignments"):
-            db.query(Assignment).filter(Assignment.file_id == file_id).delete()
+            db.query(Assignment).filter(Assignment.file_id == file_uuid).delete()
             for assignment_data in parsed_data["assignments"]:
                 try:
-                    due_date = _parse_date(assignment_data.get("parsed_date", "2024-01-15"))
-                    # Parse time if provided
-                    due_time = None
-                    if assignment_data.get("parsed_time"):
-                        due_time = _parse_time(assignment_data.get("parsed_time"))
+                    date = _parse_date(assignment_data.get("date", "2024-01-15"))
+                    time_due = None
+                    if assignment_data.get("time_due"):
+                        time_due = _parse_time(assignment_data.get("time_due"))
                     
                     db.add(Assignment(
-                        file_id=file_id,
-                        due_date=due_date,
-                        due_time=due_time,
+                        file_id=file_uuid,
+                        date=date,
+                        time_due=time_due,
                         description=assignment_data.get("description", ""),
-                        confidence=assignment_data.get("confidence", 70)
+                        confidence=assignment_data.get("confidence", 0)
                     ))
                 except Exception:
                     continue
 
         # Exams
         if parsed_data.get("exams"):
-            db.query(Exam).filter(Exam.file_id == file_id).delete()
+            db.query(Exam).filter(Exam.file_id == file_uuid).delete()
             for exam_data in parsed_data["exams"]:
                 try:
-                    exam_date = _parse_date(exam_data.get("parsed_date", "2024-01-15"))
+                    date = _parse_date(exam_data.get("date", "2024-01-15"))
                     # Parse time if provided
-                    exam_time = None
-                    if exam_data.get("parsed_time"):
-                        exam_time = _parse_time(exam_data.get("parsed_time"))
+                    time_due = None
+                    if exam_data.get("time_due"):
+                        time_due = _parse_time(exam_data.get("time_due"))
                     
                     db.add(Exam(
-                        file_id=file_id,
-                        exam_date=exam_date,
-                        exam_time=exam_time,
+                        file_id=file_uuid,
+                        date=date,
+                        time_due=time_due,
                         description=exam_data.get("description", ""),
-                        confidence=exam_data.get("confidence", 70)
+                        confidence=exam_data.get("confidence", 0)
                     ))
                 except Exception:
                     continue
 
         db.commit()
-
-        # Cache invalidation no longer needed (Redis removed)
 
         set_status("completed", 100, "Parsing completed")
     except Exception as e:
@@ -227,7 +224,7 @@ def _run_parse_and_store(file_id: int) -> None:
             pass
 
 @router.get("/parse/{file_id}/status")
-async def get_parsing_status(file_id: int):
+async def get_parsing_status(file_id: str):
     """Return current parsing status for a file from memory."""
     data = _get_status(file_id)
     if not data:
@@ -235,20 +232,23 @@ async def get_parsing_status(file_id: int):
     return data
 
 @router.post("/parse/{file_id}/cancel")
-async def cancel_parsing(file_id: int, db: Session = Depends(get_db)):
+async def cancel_parsing(file_id: str, db: Session = Depends(get_db)):
     """Cancel parsing for a file by setting status to cancelled and delete the file."""
-    # Check if parsing is in progress
     status_data = _get_status(file_id)
     current_status = status_data.get("status")
     if not current_status or current_status in ["completed", "failed", "cancelled"]:
         return {"status": "error", "message": "Cannot cancel: parsing not in progress"}
     
-    # Set status to cancelled
     _set_status(file_id, "cancelled", 0, "Parsing cancelled by user")
     
-    # Delete the file from database (this will cascade delete all related data)
     try:
-        file = db.query(File).filter(File.id == file_id).first()
+        # Validate UUID format
+        try:
+            file_uuid = uuid.UUID(file_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid file ID format")
+        
+        file = db.query(File).filter(File.id == file_uuid).first()
         if file:
             filename = file.filename
             db.delete(file)
@@ -262,7 +262,6 @@ async def cancel_parsing(file_id: int, db: Session = Depends(get_db)):
         else:
             return {"status": "cancelled", "message": "Parsing cancelled but file not found in database"}
     except Exception as e:
-        # If database deletion fails, still report cancellation success
         logging.getLogger(__name__).error(f"Failed to delete file {file_id} from database: {e}")
         return {
             "status": "cancelled", 
@@ -271,16 +270,22 @@ async def cancel_parsing(file_id: int, db: Session = Depends(get_db)):
         }
 
 @router.get("/summary/{file_id}")
-async def get_file_summary(file_id: int, db: Session = Depends(get_db)):
+async def get_file_summary(file_id: str, db: Session = Depends(get_db)):
     """Get summary for a specific file"""
     try:
+        # Validate UUID format
+        try:
+            file_uuid = uuid.UUID(file_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid file ID format")
+        
         # Get file from database
-        file = db.query(File).filter(File.id == file_id).first()
+        file = db.query(File).filter(File.id == file_uuid).first()
         if not file:
             raise HTTPException(status_code=404, detail="File not found")
         
         # Get summary from database
-        summary = db.query(Summary).filter(Summary.file_id == file_id).first()
+        summary = db.query(Summary).filter(Summary.file_id == file_uuid).first()
         if not summary:
             raise HTTPException(status_code=404, detail="Summary not found for this file")
         
@@ -288,7 +293,6 @@ async def get_file_summary(file_id: int, db: Session = Depends(get_db)):
             "file_id": file_id,
             "filename": file.filename,
             "summary": summary.summary,
-            "confidence": summary.confidence,
             "created_at": summary.created_at
         }
         
@@ -296,11 +300,17 @@ async def get_file_summary(file_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/grading/{file_id}")
-async def get_grading_breakdown(file_id: int, db: Session = Depends(get_db)):
+async def get_grading_breakdown(file_id: str, db: Session = Depends(get_db)):
     """Get grading breakdown for a specific file"""
     try:
+        # Validate UUID format
+        try:
+            file_uuid = uuid.UUID(file_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid file ID format")
+        
         # Get file from database
-        file = db.query(File).filter(File.id == file_id).first()
+        file = db.query(File).filter(File.id == file_uuid).first()
         if not file:
             raise HTTPException(status_code=404, detail="File not found")
         
@@ -328,18 +338,18 @@ async def get_grading_breakdown(file_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/exams/{file_id}")
-async def get_exam_dates(file_id: int, db: Session = Depends(get_db)):
+async def get_exam_dates(file_id: str, db: Session = Depends(get_db)):
     """Get exam dates for a specific file"""
     try:
         # Get file from database
-        file = db.query(File).filter(File.id == file_id).first()
+        file = db.query(File).filter(File.id == file_uuid).first()
         if not file:
             raise HTTPException(status_code=404, detail="File not found")
         
         # Get exams from database
         exams = db.query(Exam).filter(
             Exam.file_id == file_id
-        ).order_by(Exam.exam_date).all()
+        ).order_by(Exam.date).all()
         
         if not exams:
             return {
@@ -355,7 +365,8 @@ async def get_exam_dates(file_id: int, db: Session = Depends(get_db)):
             exam_list.append({
                 "id": exam.id,
                 "description": exam.description,
-                "exam_date": exam.parsed_date.isoformat(),
+                "date": exam.date.isoformat(),
+                "time_due": exam.time_due.isoformat() if exam.time_due else None,
                 "confidence": exam.confidence
             })
         
@@ -370,18 +381,18 @@ async def get_exam_dates(file_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/assignments/{file_id}")
-async def get_assignment_dates(file_id: int, db: Session = Depends(get_db)):
+async def get_assignment_dates(file_id: str, db: Session = Depends(get_db)):
     """Get assignment dates for a specific file"""
     try:
         # Get file from database
-        file = db.query(File).filter(File.id == file_id).first()
+        file = db.query(File).filter(File.id == file_uuid).first()
         if not file:
             raise HTTPException(status_code=404, detail="File not found")
         
         # Get assignments from database
         assignments = db.query(Assignment).filter(
             Assignment.file_id == file_id
-        ).order_by(Assignment.due_date).all()
+        ).order_by(Assignment.date).all()
         
         if not assignments:
             return {
@@ -397,7 +408,8 @@ async def get_assignment_dates(file_id: int, db: Session = Depends(get_db)):
             assignment_list.append({
                 "id": assignment.id,
                 "description": assignment.description,
-                "due_date": assignment.parsed_date.isoformat(),
+                "date": assignment.date.isoformat(),
+                "time_due": assignment.time_due.isoformat() if assignment.time_due else None,
                 "confidence": assignment.confidence
             })
         
@@ -412,11 +424,11 @@ async def get_assignment_dates(file_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/lectures/{file_id}")
-async def get_lecture_schedule(file_id: int, db: Session = Depends(get_db)):
+async def get_lecture_schedule(file_id: str, db: Session = Depends(get_db)):
     """Get all lecture days, hours, and discussion sections for a specific file"""
     try:
         # Get file from database
-        file = db.query(File).filter(File.id == file_id).first()
+        file = db.query(File).filter(File.id == file_uuid).first()
         if not file:
             raise HTTPException(status_code=404, detail="File not found")
         
@@ -480,7 +492,7 @@ async def get_lecture_schedule(file_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/syllabus/{file_id}/all")
-async def get_all_syllabus_data(file_id: int, db: Session = Depends(get_db)):
+async def get_all_syllabus_data(file_id: str, db: Session = Depends(get_db)):
     """Return summary, exams, assignments, and lectures in one response."""
 
     # Build fresh response
@@ -495,29 +507,30 @@ async def get_all_syllabus_data(file_id: int, db: Session = Depends(get_db)):
         if summary:
             summary_payload = {
                 "summary": summary.summary,
-                "confidence": summary.confidence,
                 "created_at": summary.created_at
             }
 
         # Exams
-        exams_q = db.query(Exam).filter(Exam.file_id == file_id).order_by(Exam.exam_date).all()
+        exams_q = db.query(Exam).filter(Exam.file_id == file_id).order_by(Exam.date).all()
         exams_payload = [
             {
                 "id": exam.id,
                 "description": exam.description,
-                "exam_date": exam.exam_date.isoformat(),
+                "date": exam.date.isoformat() if exam.date else None,
+                "time_due": exam.time_due.isoformat() if exam.time_due else None,
                 "confidence": exam.confidence
             }
             for exam in exams_q
         ]
 
         # Assignments
-        assignments_q = db.query(Assignment).filter(Assignment.file_id == file_id).order_by(Assignment.due_date).all()
+        assignments_q = db.query(Assignment).filter(Assignment.file_id == file_id).order_by(Assignment.date).all()
         assignments_payload = [
             {
                 "id": a.id,
                 "description": a.description,
-                "due_date": a.due_date.isoformat(),
+                "date": a.date.isoformat() if a.date else None,
+                "time_due": a.time_due.isoformat() if a.time_due else None,
                 "confidence": a.confidence
             }
             for a in assignments_q

@@ -43,15 +43,13 @@ export default function AssignmentCard({
             <div className="flex-1">
               <div className="flex items-center space-x-2">
                 <h3 className="text-lg font-semibold text-gray-900 line-clamp-2">
-                  {assignment.title}
+                  {assignment.description}
                 </h3>
                 {isSelected && (
                   <CheckCircle className="w-5 h-5 text-blue-600 flex-shrink-0" />
                 )}
               </div>
-              {assignment.course && (
-                <p className="text-sm text-gray-600">{assignment.course}</p>
-              )}
+
             </div>
           </div>
           
@@ -85,7 +83,7 @@ export default function AssignmentCard({
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
-                    onDelete(assignment.id)
+                    onDelete(assignment.id.toString())
                   }}
                   className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                   title="Delete assignment"
@@ -109,35 +107,24 @@ export default function AssignmentCard({
           <div className="flex items-center space-x-2">
             <Calendar className="w-4 h-4 text-gray-400" />
             <span className="text-sm text-gray-600">
-              Due: {formatDate(assignment.dueDate)}
+              Due: {formatDate(assignment.date)}
             </span>
           </div>
           
           <div className="flex items-center space-x-2">
             <Clock className="w-4 h-4 text-gray-400" />
             <span className="text-sm text-gray-600">
-              {formatTime(assignment.dueDate)}
+              {formatTime(assignment.date)}
             </span>
           </div>
-
-          {assignment.location && (
-            <div className="flex items-center space-x-2">
-              <MapPin className="w-4 h-4 text-gray-400" />
-              <span className="text-sm text-gray-600">
-                {assignment.location}
-              </span>
-            </div>
-          )}
-
-
         </div>
 
         {/* Tags */}
         <div className="flex flex-wrap items-center gap-2 mb-3">
           <span className={clsx(
             "px-2 py-1 text-xs font-medium rounded-full",
-            getDueStatus(assignment.dueDate).bg,
-            getDueStatus(assignment.dueDate).color
+            getDueStatus(assignment.date).bg,
+            getDueStatus(assignment.date).color
           )}>
             Assignment
           </span>

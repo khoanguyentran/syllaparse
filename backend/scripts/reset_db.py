@@ -58,15 +58,23 @@ def recreate_tables():
             conn.execute(text("GRANT ALL ON SCHEMA public TO postgres;"))
             conn.execute(text("GRANT ALL ON SCHEMA public TO public;"))
             
+            # Enable UUID extension for PostgreSQL
+            print("  Enabling UUID extension...")
+            conn.execute(text('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";'))
+            
         print("✅ All tables dropped successfully")
         
         print("🔨 Creating new tables with updated schema...")
         
         # Create all tables
         Base.metadata.create_all(engine)
-        print("✅ All tables created successfully")
+        print("✅ All tables created successfully with UUID support")
         
         print("🎉 Database schema has been updated!")
+        print("\nKey changes:")
+        print("  • File IDs are now UUIDs instead of integers")
+        print("  • All foreign keys updated to reference UUIDs")
+        print("  • UUID extension enabled for PostgreSQL")
         print("\nNote: All existing data has been lost. This is expected during development.")
         
     except Exception as e:

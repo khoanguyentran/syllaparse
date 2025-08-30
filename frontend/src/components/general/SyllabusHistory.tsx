@@ -7,8 +7,8 @@ import api from '@/utils/api'
 
 interface SyllabusHistoryProps {
   googleId: string | null
-  onSyllabusSelect: (fileId: number) => void
-  currentFileId?: number
+  onSyllabusSelect: (fileId: string) => void
+  currentFileId?: string
 }
 
 export default function SyllabusHistory({ 
@@ -48,7 +48,7 @@ export default function SyllabusHistory({
     }
   }
 
-  const handleDeleteSyllabus = async (fileId: number) => {
+  const handleDeleteSyllabus = async (fileId: string) => {
     if (!confirm('Are you sure you want to delete this syllabus? This action cannot be undone.')) {
       return
     }

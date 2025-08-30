@@ -21,7 +21,7 @@ interface SummaryStatsProps {
   assignments: Assignment[]
   exams: Exam[]
   lectures: Lecture[]
-  fileId: number | null
+  fileId: string | null
 }
 
 export default function SummaryStats({ assignments, exams, lectures, fileId }: SummaryStatsProps) {
@@ -122,7 +122,7 @@ export default function SummaryStats({ assignments, exams, lectures, fileId }: S
           <div className="p-2 rounded-lg bg-green-100 text-green-600 mb-2">
             <Calendar className="w-5 h-5" />
           </div>
-          <p className="text-sm font-medium text-gray-600">Days of Week</p>
+          <p className="text-sm font-medium text-gray-600">Lectures Per Week</p>
           <p className="text-2xl font-bold text-gray-900">{totalDaysOfWeek}</p>
         </div>
       </div>
@@ -135,12 +135,6 @@ export default function SummaryStats({ assignments, exams, lectures, fileId }: S
           </div>
           <div className="ml-3">
             <p className="text-sm font-medium text-gray-600">Grade Breakdown</p>
-            <p className="text-xs text-gray-500">
-              {gradingBreakdown && gradingBreakdown.categories && gradingBreakdown.categories.length > 0
-                ? `From syllabus (${gradingBreakdown.confidence || 'N/A'}% confidence)`
-                : 'Estimated typical weights'
-              }
-            </p>
           </div>
         </div>
         

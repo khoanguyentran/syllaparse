@@ -1,8 +1,10 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, Date, ForeignKey, CheckConstraint, Time, JSON
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database.db import Base
 from datetime import datetime
+import uuid
 
 class User(Base):
     __tablename__ = "users"
@@ -26,7 +28,7 @@ class User(Base):
 class File(Base):
     __tablename__ = "files"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     filename = Column(String(255), nullable=False)
     file_path = Column(Text, nullable=False)
@@ -43,29 +45,22 @@ class Summary(Base):
     __tablename__ = "summaries"
     
     id = Column(Integer, primary_key=True, index=True)
-    file_id = Column(Integer, ForeignKey("files.id"), nullable=False, index=True)
+    file_id = Column(UUID(as_uuid=True), ForeignKey("files.id"), nullable=False, index=True)
     summary = Column(Text, nullable=False)
-    confidence = Column(Integer, nullable=True)
     grading_breakdown = Column(JSON, nullable=True) 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     # Relationships
     file = relationship("File", back_populates="summary")
-    
-    # Constraints
-    __table_args__ = (
-        CheckConstraint(confidence >= 0, name='confidence_min'),
-        CheckConstraint(confidence <= 100, name='confidence_max'),
-    )
 
 class Assignment(Base):
     __tablename__ = "assignments"
     
     id = Column(Integer, primary_key=True, index=True)
-    file_id = Column(Integer, ForeignKey("files.id"), nullable=False, index=True)
-    due_date = Column(Date, nullable=False)
-    due_time = Column(Time, nullable=True) 
+    file_id = Column(UUID(as_uuid=True), ForeignKey("files.id"), nullable=False, index=True)
+    date = Column(Date, nullable=False)
+    time_due = Column(Time, nullable=True) 
     confidence = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -84,9 +79,9 @@ class Exam(Base):
     __tablename__ = "exams"
     
     id = Column(Integer, primary_key=True, index=True)
-    file_id = Column(Integer, ForeignKey("files.id"), nullable=False, index=True)
-    exam_date = Column(Date, nullable=False)
-    exam_time = Column(Time, nullable=True)  
+    file_id = Column(UUID(as_uuid=True), ForeignKey("files.id"), nullable=False, index=True)
+    date = Column(Date, nullable=False)
+    time_due = Column(Time, nullable=True)  
     confidence = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -105,7 +100,7 @@ class Lectures(Base):
     __tablename__ = "lectures"
     
     id = Column(Integer, primary_key=True, index=True)
-    file_id = Column(Integer, ForeignKey("files.id"), nullable=False, index=True)
+    file_id = Column(UUID(as_uuid=True), ForeignKey("files.id"), nullable=False, index=True)
     day = Column(Integer, nullable=False)  # 0 = monday, 1 = tuesday, etc.
     start_time = Column(Time, nullable=False)
     end_time = Column(Time, nullable=False)
