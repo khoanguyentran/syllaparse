@@ -26,7 +26,10 @@ def get_engine():
     global _engine
     if _engine is None:
         database_url = get_database_url()
-        _engine = create_engine(database_url)
+        if "sslmode" not in database_url:
+            separator = "&" if "?" in database_url else "?"
+            database_url = f"{database_url}{separator}sslmode=require"
+        _engine = create_engine(database_url, pool_pre_ping=True)
     return _engine
 
 def get_session_local():
