@@ -12,11 +12,11 @@ interface CalendarExportProps {
   onExportComplete: () => void
 }
 
-export default function CalendarExport({ 
-  selectedLectures, 
-  selectedAssignments, 
+export default function CalendarExport({
+  selectedLectures,
+  selectedAssignments,
   selectedExams,
-  onExportComplete 
+  onExportComplete
 }: CalendarExportProps) {
   const [isExporting, setIsExporting] = useState(false)
   const [exportStatus, setExportStatus] = useState<'idle' | 'success' | 'error'>('idle')
@@ -53,9 +53,9 @@ export default function CalendarExport({
 
     // Create events for selected lectures (recurring weekly)
     selectedLectures.forEach(lecture => {
-      const startDate = new Date(lecture.start_date)
-      const endDate = new Date(lecture.end_date)
-      
+      const startDate = (() => { const [y, m, d] = lecture.start_date.split('-').map(Number); return new Date(y, m - 1, d) })()
+      const endDate = (() => { const [y, m, d] = lecture.end_date.split('-').map(Number); return new Date(y, m - 1, d) })()
+
       // Create weekly recurring events
       let currentDate = new Date(startDate)
       while (currentDate <= endDate) {
@@ -63,17 +63,17 @@ export default function CalendarExport({
         const targetDay = (lecture.day + 1) % 7 // Convert 0-6 (Mon-Sun) to 1-7 (Sun-Sat)
         const daysToAdd = (targetDay - currentDate.getDay() + 7) % 7
         currentDate.setDate(currentDate.getDate() + daysToAdd)
-        
+
         if (currentDate <= endDate) {
           const startTime = new Date(`2000-01-01T${lecture.start_time}`)
           const endTime = new Date(`2000-01-01T${lecture.end_time}`)
-          
+
           const eventStart = new Date(currentDate)
           eventStart.setHours(startTime.getHours(), startTime.getMinutes())
-          
+
           const eventEnd = new Date(currentDate)
           eventEnd.setHours(endTime.getHours(), endTime.getMinutes())
-          
+
           events.push({
             summary: `Lecture: ${lecture.location || 'Class'}`,
             description: `Weekly lecture session`,
@@ -87,7 +87,7 @@ export default function CalendarExport({
             },
             location: lecture.location || undefined
           })
-          
+
           // Move to next week
           currentDate.setDate(currentDate.getDate() + 7)
         }
@@ -96,13 +96,13 @@ export default function CalendarExport({
 
     // Create events for selected assignments
     selectedAssignments.forEach(assignment => {
-      const dueDate = new Date(assignment.date)
+      const dueDate = (() => { const [y, m, d] = assignment.date.split('-').map(Number); return new Date(y, m - 1, d) })()
       const eventStart = new Date(dueDate)
       eventStart.setHours(9, 0, 0, 0) // Set to 9 AM on due date
-      
+
       const eventEnd = new Date(dueDate)
       eventEnd.setHours(10, 0, 0, 0) // Set to 10 AM on due date
-      
+
       events.push({
         summary: `Assignment: ${assignment.description}`,
         description: `Due: ${assignment.description}`,
@@ -120,13 +120,16 @@ export default function CalendarExport({
 
     // Create events for selected exams
     selectedExams.forEach(exam => {
-      const examDate = new Date(exam.date)
+
+      if (!exam.date || exam.date === 'Not Listed') return
+
+      const examDate = (() => { const [y, m, d] = exam.date.split('-').map(Number); return new Date(y, m - 1, d) })()
       const eventStart = new Date(examDate)
       eventStart.setHours(9, 0, 0, 0) // Set to 9 AM on exam date
-      
+
       const eventEnd = new Date(examDate)
       eventEnd.setHours(11, 0, 0, 0) // Set to 11 AM on exam date (2 hour duration)
-      
+
       events.push({
         summary: `Exam: ${exam.description}`,
         description: `Exam: ${exam.description}`,
@@ -208,7 +211,7 @@ export default function CalendarExport({
         setExportStatus('error')
         setExportMessage('Failed to add events to Google Calendar. Please try again.')
       }
-      
+
     } catch (error) {
       setExportStatus('error')
       setExportMessage('Failed to export calendar events. Please try again.')
@@ -288,9 +291,8 @@ export default function CalendarExport({
         </div>
 
         {exportStatus !== 'idle' && (
-          <div className={`flex items-center space-x-2 p-3 rounded-lg ${
-            exportStatus === 'success' ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
-          }`}>
+          <div className={`flex items-center space-x-2 p-3 rounded-lg ${exportStatus === 'success' ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
+            }`}>
             {getStatusIcon()}
             <span className={`text-sm font-medium ${getStatusColor()}`}>
               {exportMessage}
@@ -320,11 +322,10 @@ export default function CalendarExport({
           <button
             onClick={exportToGoogleCalendar}
             disabled={isExporting || totalItems === 0}
-            className={`w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-lg font-medium transition-colors ${
-              isExporting || totalItems === 0
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                : 'bg-green-600 text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
-            }`}
+            className={`w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-lg font-medium transition-colors ${isExporting || totalItems === 0
+              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+              : 'bg-green-600 text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
+              }`}
           >
             {isExporting ? (
               <>
@@ -342,7 +343,7 @@ export default function CalendarExport({
 
         <div className="text-xs text-gray-500 text-center">
           <p>
-            {hasGoogleAccess 
+            {hasGoogleAccess
               ? "Events will be added directly to your primary Google Calendar with reminders"
               : "Sign in with Google and grant calendar permissions to add events directly"
             }

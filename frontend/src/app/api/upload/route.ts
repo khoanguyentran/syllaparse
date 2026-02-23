@@ -2,12 +2,30 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Storage } from '@google-cloud/storage'
 import { v4 as uuidv4 } from 'uuid'
 import path from 'path'
+import fs from 'fs'
 
 // Initialize Google Cloud Storage
-const storage = new Storage({
-  projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
-  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
-})
+let storage: Storage
+
+try {
+  const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS
+  if (credentialsPath && fs.existsSync(credentialsPath)) {
+    const credentials = JSON.parse(fs.readFileSync(credentialsPath, 'utf-8'))
+    storage = new Storage({
+      projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
+      credentials: credentials,
+    })
+  } else {
+    storage = new Storage({
+      projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
+    })
+  }
+} catch (error) {
+  console.error('Failed to initialize Google Cloud Storage:', error)
+  storage = new Storage({
+    projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
+  })
+}
 
 const bucketName = process.env.GOOGLE_CLOUD_BUCKET_NAME || 'syllaparse-syllabus-files'
 const bucket = storage.bucket(bucketName)
@@ -98,7 +116,7 @@ export async function POST(request: NextRequest) {
 
     const pythonData = await pythonResponse.json()
     console.log('Python backend response:', pythonData)
-    
+
     if (!pythonData.file_id) {
       throw new Error('Python backend did not return file_id')
     }
@@ -106,10 +124,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       message: 'File uploaded successfully',
       filename: file.name,
-      filepath: publicUrl, 
+      filepath: publicUrl,
       file_size: file.size,
       upload_date: new Date().toISOString(),
-      file_id: pythonData.file_id, 
+      file_id: pythonData.file_id,
     })
 
   } catch (error: unknown) {
