@@ -21,8 +21,8 @@ export default function AppHeader({ onGoogleIdChange }: AppHeaderProps) {
             </div>
           </div>
           <div className="flex items-center space-x-4">
-            <Calendar className="w-5 h-5 text-gray-400" />
-            <span className="text-sm text-gray-600">
+            <Calendar className="w-8 h-8 text-gray-400" />
+            <span className="text-sm text-gray-600 whitespace-nowrap">
               {format(new Date(), 'EEEE, MMMM d, yyyy')}
             </span>
             <GoogleSignIn onGoogleIdChange={onGoogleIdChange} />

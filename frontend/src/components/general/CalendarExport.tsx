@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Calendar, CheckCircle, AlertCircle, Plus } from 'lucide-react'
 import { Lecture, Assignment, Exam, CalendarEvent } from '@/types'
+import api from '@/utils/api'
 
 interface CalendarExportProps {
   selectedLectures: Lecture[]
@@ -25,20 +26,13 @@ export default function CalendarExport({
 
   const totalItems = selectedLectures.length + selectedAssignments.length + selectedExams.length
 
-  // Check if user has Google Calendar access
   useEffect(() => {
     const checkGoogleAccess = async () => {
       try {
-        // Check if we have a valid Google access token
-        const token = localStorage.getItem('google_access_token')
-        if (token) {
-          // Verify token is still valid by making a test API call
-          const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary', {
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          })
-          setHasGoogleAccess(response.ok)
+        const response = await api.checkCalendarAccess()
+        if (response.ok) {
+          const data = await response.json()
+          setHasGoogleAccess(data.has_access || false)
         } else {
           setHasGoogleAccess(false)
         }
@@ -170,38 +164,26 @@ export default function CalendarExport({
 
     try {
       const events = createCalendarEvents()
-      const token = localStorage.getItem('google_access_token')
-      
-      if (!token) {
-        throw new Error('No Google access token found')
-      }
 
-      // Create events in Google Calendar
+      // Create events in Google Calendar via backend proxy
       let successCount = 0
       let errorCount = 0
 
       for (const event of events) {
         try {
-          const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              summary: event.summary,
-              description: event.description,
-              start: event.start,
-              end: event.end,
-              location: event.location,
-              reminders: {
-                useDefault: false,
-                overrides: [
-                  { method: 'popup', minutes: 30 },
-                  { method: 'email', minutes: 60 }
-                ]
-              }
-            })
+          const response = await api.createCalendarEvent({
+            summary: event.summary,
+            description: event.description,
+            start: event.start,
+            end: event.end,
+            location: event.location,
+            reminders: {
+              useDefault: false,
+              overrides: [
+                { method: 'popup', minutes: 30 },
+                { method: 'email', minutes: 60 }
+              ]
+            }
           })
 
           if (response.ok) {

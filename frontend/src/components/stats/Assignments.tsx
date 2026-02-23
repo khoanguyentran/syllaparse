@@ -205,7 +205,7 @@ export default function Assignments({
                         <div className="flex items-center space-x-4 text-sm text-gray-500">
                           <div className="flex items-center space-x-1">
                             <Calendar className="w-4 h-4" />
-                            <span>Due Date: {formatDate(assignment.date)}</span>
+                            <span className="whitespace-nowrap">Due Date: {formatDate(assignment.date)}</span>
                           </div>
                           {assignment.time_due && (
                             <div className="flex items-center space-x-1">

@@ -22,30 +22,26 @@ function StatsContent() {
   const [exams, setExams] = useState<Exam[]>([])
   const [lectures, setLectures] = useState<Lecture[]>([])
   const [fileSummary, setFileSummary] = useState<string>('')
-  const [courseName, setCourseName] = useState<string>('')
   const [selectedLectures, setSelectedLectures] = useState<Lecture[]>([])
   const [selectedAssignments, setSelectedAssignments] = useState<Assignment[]>([])
   const [selectedExams, setSelectedExams] = useState<Exam[]>([])
-  const [authError, setAuthError] = useState<string | null>(null)
   const [googleId, setGoogleId] = useState<string | null>(null)
-  const [currentFileId, setCurrentFileId] = useState<string | null>(null)
+  const [activeFileId, setActiveFileId] = useState<string | null>(null)
   const [isLoadingSyllabus, setIsLoadingSyllabus] = useState(false)
   const [isAutoLoading, setIsAutoLoading] = useState(false)
   const [pdfFile, setPdfFile] = useState<File | null>(null)
 
   useEffect(() => {
     const fileId = searchParams.get('fileId')
-    if (fileId && !currentFileId) {
-      // File ID is now a UUID string, no need to parse as integer
-      setCurrentFileId(fileId)
+    if (fileId && !activeFileId) {
+      setActiveFileId(fileId)
       loadSyllabusData(fileId)
     }
-  }, [searchParams, currentFileId])
+  }, [searchParams, activeFileId])
 
-  // Auto-load most recent syllabus when user is authenticated
   useEffect(() => {
     const loadMostRecentSyllabus = async () => {
-      if (googleId && !currentFileId) {
+      if (googleId && !activeFileId) {
         console.log('Auto-loading most recent syllabus...')
         setIsAutoLoading(true)
         try {
@@ -69,20 +65,12 @@ function StatsContent() {
     }
 
     loadMostRecentSyllabus()
-  }, [googleId, currentFileId])
+  }, [googleId, activeFileId])
 
-  // Handle Google ID changes from GoogleSignIn component
   const handleGoogleIdChange = (newGoogleId: string | null) => {
     setGoogleId(newGoogleId)
-    setAuthError(null)
   }
 
-  // Helper function to check if user is authenticated
-  const isAuthenticated = (): boolean => {
-    return googleId !== null
-  }
-
-  // Load real data from backend when syllabus is selected
   const loadSyllabusData = async (fileId: string) => {
     if (!fileId) return
     
@@ -97,7 +85,7 @@ function StatsContent() {
     setSelectedLectures([])
     setPdfFile(null)
     
-    setCurrentFileId(fileId)
+    setActiveFileId(fileId)
     
     try {
       // Load assignments, exams, and lectures separately
@@ -174,25 +162,14 @@ function StatsContent() {
         console.log('Summary data received:', summaryData)
         if (summaryData && summaryData.summary) {
           setFileSummary(summaryData.summary)
-          
-          // Extract course name from summary text
-          const summaryText = summaryData.summary
-          const courseMatch = summaryText.match(/Course:\s*([^\n]+)/i)
-          if (courseMatch && courseMatch[1] && courseMatch[1].trim() !== 'N/A') {
-            setCourseName(courseMatch[1].trim())
-          } else {
-            setCourseName('')
-          }
         } else {
           console.log('No summary data received, setting empty content')
           setFileSummary('')
-          setCourseName('')
         }
       } else {
         console.warn('Failed to load summary:', summaryResponse.status)
         console.log('Setting empty syllabus content')
         setFileSummary('')
-        setCourseName('')
       }
       
       // Load PDF file
@@ -228,12 +205,10 @@ function StatsContent() {
       
     } catch (error) {
       console.error('Error loading syllabus data:', error)
-      setAuthError('Failed to load syllabus data')
       setAssignments([])
       setExams([])
       setLectures([])
       setFileSummary('')
-      setCourseName('')
       setPdfFile(null)
     } finally {
       setIsLoadingSyllabus(false)
@@ -241,10 +216,10 @@ function StatsContent() {
   }
 
   // Handle syllabus selection from history
-  const handleSyllabusSelect = (fileId: string | number) => {
-    if (fileId === 0 || fileId === '0') {
+  const handleSyllabusSelect = (fileId: string | null) => {
+    if (!fileId || fileId === '0') {
       // Reset to no selection
-      setCurrentFileId(null)
+      setActiveFileId(null)
       setAssignments([])
       setExams([])
       setLectures([])
@@ -253,16 +228,15 @@ function StatsContent() {
       setPdfFile(null)
     } else {
       console.log('Syllabus selected from history:', fileId)
-      const fileIdString = typeof fileId === 'number' ? fileId.toString() : fileId
-      setCurrentFileId(fileIdString)
+      setActiveFileId(fileId)
       
       // Update URL with file ID
       const params = new URLSearchParams(searchParams.toString())
-      params.set('fileId', fileIdString)
+      params.set('fileId', fileId)
       router.replace(`/stats?${params.toString()}`, { scroll: false })
       
       // Load the syllabus data
-      loadSyllabusData(fileIdString)
+      loadSyllabusData(fileId)
     }
   }
 
@@ -289,8 +263,6 @@ function StatsContent() {
     setSelectedExams([])
   }
 
-
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
       <AppHeader onGoogleIdChange={handleGoogleIdChange} />
@@ -308,11 +280,11 @@ function StatsContent() {
             <SyllabusHistory
               googleId={googleId}
               onSyllabusSelect={handleSyllabusSelect}
-              currentFileId={currentFileId || undefined}
+              activeFileId={activeFileId || undefined}
             />
           </div>
           
-          {currentFileId && <SummaryStats assignments={assignments} exams={exams} lectures={lectures} fileId={currentFileId} />}
+          {activeFileId && <SummaryStats assignments={assignments} exams={exams} lectures={lectures} fileId={activeFileId} />}
         </div>
 
         {/* Auto-loading indicator */}
@@ -326,7 +298,7 @@ function StatsContent() {
         )}
 
         {/* Two Column Layout - Left: Syllabus & Calendar Export, Right: Lectures & Assignments */}
-        {!isAutoLoading && currentFileId && (
+        {!isAutoLoading && activeFileId && (
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 mt-8">
             {/* Left Column - Syllabus Viewer & Calendar Export */}
             <div className="space-y-6">
@@ -384,7 +356,7 @@ function StatsContent() {
                 </div>
               ) : (
                 <LectureTimes
-                  fileId={currentFileId}
+                  fileId={activeFileId}
                   onLectureSelect={handleLectureSelect}
                   selectedLectures={selectedLectures}
                 />
@@ -394,14 +366,14 @@ function StatsContent() {
               <div className="space-y-6">
                 {/* Exams Component */}
                 <Exams
-                  fileId={currentFileId}
+                  fileId={activeFileId}
                   onExamSelect={handleExamSelect}
                   selectedExams={selectedExams}
                 />
 
                 {/* Assignments Component */}
                 <Assignments
-                  fileId={currentFileId}
+                  fileId={activeFileId}
                   onAssignmentSelect={handleAssignmentSelect}
                   selectedAssignments={selectedAssignments}
                 />
@@ -422,7 +394,7 @@ function StatsContent() {
         </div>
 
         {/* Empty State */}
-        {!isAutoLoading && !currentFileId && (
+        {!isAutoLoading && !activeFileId && (
           <div className="text-center py-12">
             <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
               <BookOpen className="w-8 h-8 text-gray-400" />

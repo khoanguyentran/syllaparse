@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { BookOpen } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import FileUpload from '@/components/general/FileUpload'
@@ -10,15 +10,13 @@ import api from '@/utils/api'
 
 export default function Home() {
   const router = useRouter()
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [uploadProgress, setUploadProgress] = useState(0)
   const [authError, setAuthError] = useState<string | null>(null)
   const [googleId, setGoogleId] = useState<string | null>(null)
   const [isUploading, setIsUploading] = useState(false)
-  const [currentFileId, setCurrentFileId] = useState<number | null>(null)
-  const [isCancelled, setIsCancelled] = useState(false)
+  const [activeFile, setActiveFile] = useState<File | null>(null)
+  // The database file ID of the currentdf active syllabus
+  const [activeFileId, setActiveFileId] = useState<string | null>(null)
 
-  // Handle Google ID changes from GoogleSignIn component
   const handleGoogleIdChange = (newGoogleId: string | null) => {
     setGoogleId(newGoogleId)
     setAuthError(null)
@@ -30,142 +28,58 @@ export default function Home() {
 
   const parseSyllabus = async (file: File) => {
     setIsUploading(true)
-    setUploadProgress(0)
 
     try {
-      const progressInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 50) { 
-            clearInterval(progressInterval)
-            return 50
-          }
-          return prev + 10
-        })
-      }, 200)
-
       if (!googleId) {
         setAuthError('User not authenticated. Please sign in with Google first.')
         return
       }
       
       const response = await api.uploadFile(file, googleId)
-      
+      const uploadResult = await response.json().catch(() => ({}))
+
       if (!response.ok) {
-        throw new Error('Failed to upload file')
+        const message = uploadResult?.details ?? uploadResult?.error ?? 'Failed to upload file'
+        throw new Error(message)
       }
-
-      const uploadResult = await response.json()
-      console.log('File uploaded successfully:', uploadResult)
-
-      clearInterval(progressInterval)
-      setUploadProgress(100)
 
       const fileId = uploadResult.file_id
-      console.log('File ID received:', fileId)
-      
-      setCurrentFileId(fileId)
-      
-      console.log('Waiting for parsing to complete...')
-      
-      let parsingComplete = false
-      let attempts = 0
-      const maxAttempts = 60 
-      
-      while (!parsingComplete && attempts < maxAttempts) {
-        try {
-          console.log('Checking parsing status for fileId:', fileId)
-          const statusResponse = await api.getParsingStatus(fileId)
-          if (statusResponse.ok) {
-            const statusData = await statusResponse.json()
-            console.log('Parsing status:', statusData)
-            
-            if (statusData.progress) {
-              const realProgress = parseInt(statusData.progress)
-              const parsingProgress = (realProgress / 100) * 50
-              const combinedProgress = 50 + parsingProgress
-              setUploadProgress(combinedProgress)
-            }
-            
-            if (statusData.status === 'completed') {
-              parsingComplete = true
-              console.log('Parsing completed successfully')
-              setUploadProgress(100) 
-            } else if (statusData.status === 'failed') {
-              throw new Error(`Parsing failed: ${statusData.message}`)
-            } else if (statusData.status === 'cancelled') {
-              console.log('Parsing was cancelled')
-              setIsCancelled(true)
-              setIsUploading(false)
-              setUploadProgress(0)
-              setCurrentFileId(null)
-              setSelectedFile(null)
-              return // Exit early on cancellation
-            } else {
-              console.log('Parsing in progress, waiting...')
-              await new Promise(resolve => setTimeout(resolve, 5000)) 
-              attempts++
-            }
-          } else {
-            console.warn('Failed to get parsing status, retrying...')
-            await new Promise(resolve => setTimeout(resolve, 5000))
-            attempts++
-          }
-        } catch (statusError) {
-          console.warn('Error checking parsing status:', statusError)
-          await new Promise(resolve => setTimeout(resolve, 5000))
-          attempts++
-        }
+      if (!fileId) {
+        throw new Error(uploadResult?.error ?? 'Server did not return a file ID')
       }
-      
-      if (!parsingComplete) {
-        throw new Error('Parsing timed out after 5 minutes')
-      }
-      
-      console.log('Parsing completed, redirecting to stats page...')
+      setActiveFileId(fileId)
       router.push(`/stats?fileId=${fileId}`)
-      
     } catch (error) {
       console.error('Error uploading file:', error)
-      setAuthError('Failed to upload file. Please try again.')
+      setAuthError(error instanceof Error ? error.message : 'Failed to upload file. Please try again.')
     } finally {
       setIsUploading(false)
-      setUploadProgress(0)
     }
   }
 
   const handleFileSelect = (file: File) => {
-    setSelectedFile(file)
+    setActiveFile(file)
     setAuthError(null)
   }
 
   const handleUpload = () => {
-    if (selectedFile) {
-      parseSyllabus(selectedFile)
+    if (activeFile) {
+      parseSyllabus(activeFile)
     }
   }
 
-  const handleCancel = async () => {
-    if (currentFileId) {
-      try {
-        await api.cancelParsing(currentFileId)
-        console.log('Parsing cancelled on backend')
-      } catch (error) {
-        console.error('Failed to cancel parsing on backend:', error)
-      }
-    }
-    
-    setIsCancelled(true)
+  const handleCancel = () => {
     setIsUploading(false)
-    setUploadProgress(0)
-    setCurrentFileId(null)
-    setSelectedFile(null)
+    setActiveFileId(null)
+    setActiveFile(null)
   }
 
-  const handleOldSyllabusSelect = (fileId: number) => {
-    if (fileId === 0) {
-      setCurrentFileId(null)
+  const handleOldSyllabusSelect = (fileId: string | null) => {
+    if (!fileId) {
+      setActiveFileId(null)
     } else {
       console.log('Syllabus selected from history:', fileId)
+      setActiveFileId(fileId)
       router.push(`/stats?fileId=${fileId}`)
     }
   }
@@ -194,7 +108,7 @@ export default function Home() {
                 <SyllabusHistory
                   googleId={googleId}
                   onSyllabusSelect={handleOldSyllabusSelect}
-                  currentFileId={currentFileId || undefined}
+                  activeFileId={activeFileId || undefined}
                 />
               </div>
             </div>
@@ -226,9 +140,8 @@ export default function Home() {
               onFileSelect={handleFileSelect}
               onUpload={handleUpload}
               onCancel={handleCancel}
-              selectedFile={selectedFile}
+              activeFile={activeFile}
               isUploading={isUploading}
-              uploadProgress={uploadProgress}
               disabled={!isAuthenticated()}
             />
             
@@ -237,7 +150,7 @@ export default function Home() {
         </div>
 
         {/* Empty State */}
-        {!isUploading && !selectedFile && (
+        {!isUploading && !activeFile && (
           <div className="text-center py-12">
             <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
               <BookOpen className="w-8 h-8 text-gray-400" />

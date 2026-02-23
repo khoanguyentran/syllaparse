@@ -207,7 +207,7 @@ export default function Exams({
                         <div className="flex items-center space-x-4 text-sm text-gray-500">
                           <div className="flex items-center space-x-1">
                             <Calendar className="w-4 h-4" />
-                            <span>Exam Date: {formatDate(exam.date)}</span>
+                            <span className="whitespace-nowrap">Exam Date: {formatDate(exam.date)}</span>
                           </div>
                           {exam.time_due && (
                             <div className="flex items-center space-x-1">

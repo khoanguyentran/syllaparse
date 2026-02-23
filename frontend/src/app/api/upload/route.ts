@@ -112,12 +112,26 @@ export async function POST(request: NextRequest) {
       file_id: pythonData.file_id, 
     })
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Upload error:', error)
+
+    // User-friendly message for Google Cloud billing disabled
+    const err = error as { response?: { data?: string; status?: number }; message?: string }
+    const rawMessage = typeof err?.response?.data === 'string' ? err.response.data : err?.message ?? ''
+    const isBillingDisabled =
+      err?.response?.status === 403 &&
+      (rawMessage.includes('billing account') ||
+        rawMessage.includes('accountDisabled') ||
+        rawMessage.includes('disabled in state closed'))
+
+    const userMessage = isBillingDisabled
+      ? 'Google Cloud Storage is unavailable: the billing account for this project is disabled. Re-enable billing in Google Cloud Console (Billing) or use a project with an active billing account.'
+      : (error instanceof Error ? error.message : 'Unknown error')
+
     return NextResponse.json(
-      { 
+      {
         error: 'Failed to upload file',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        details: userMessage,
       },
       { status: 500 }
     )

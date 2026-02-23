@@ -24,11 +24,10 @@ def _get_status(file_id: str) -> dict:
     """Get parsing status from memory"""
     return _parsing_status.get(_status_key(file_id), {})
 
-def _set_status(file_id: str, status: str, progress: int, message: str):
+def _set_status(file_id: str, status: str, message: str):
     """Set parsing status in memory"""
     _parsing_status[_status_key(file_id)] = {
         "status": status,
-        "progress": str(progress),
         "message": message
     }
 
@@ -46,7 +45,7 @@ async def _start_parsing(file_id: str, background_tasks: BackgroundTasks, db: Se
         return False
 
     # Initialize status
-    _set_status(file_id, "queued", 0, "Queued for parsing")
+    _set_status(file_id, "queued", "Queued for parsing")
 
     # Launch background task
     background_tasks.add_task(_run_parse_and_store, file_id)
@@ -66,8 +65,8 @@ def _run_parse_and_store(file_id: str) -> None:
     logger = logging.getLogger(__name__)
     logger.info(f"Starting parse and store for file {file_id}")
     
-    def set_status(status: str, progress: int, message: str):
-        _set_status(file_id, status, progress, message)
+    def set_status(status: str, message: str):
+        _set_status(file_id, status, message)
     
     def check_cancelled() -> bool:
         """Check if parsing has been cancelled or file has been deleted."""
@@ -84,7 +83,7 @@ def _run_parse_and_store(file_id: str) -> None:
         except Exception:
             return False
 
-    set_status("started", 5, "Starting parse")
+        set_status("started", "Starting parse")
     SessionLocal = get_session_local()
     db = SessionLocal()
     try:
@@ -97,12 +96,12 @@ def _run_parse_and_store(file_id: str) -> None:
         file = db.query(File).filter(File.id == file_uuid).first()
         if not file:
             logger.error(f"File {file_id} not found in database")
-            set_status("failed", 100, "File not found")
+            set_status("failed", "File not found")
             return
 
         logger.info(f"Processing file {file_id}: {file.filename}")
         parser = Parser()
-        set_status("extracting", 15, "Extracting text and calling AI")
+        set_status("extracting", "Extracting text and calling AI")
         
         # Check for cancellation before AI processing
         if check_cancelled():
@@ -112,7 +111,7 @@ def _run_parse_and_store(file_id: str) -> None:
         result = asyncio.run(parser.parse_syllabus(file.file_path))
         if not result.get("success"):
             logger.error(f"Parsing failed for file {file_id}: {result.get('error', 'Unknown error')}")
-            set_status("failed", 100, f"Parsing failed: {result.get('error', 'Unknown error')}")
+            set_status("failed", f"Parsing failed: {result.get('error', 'Unknown error')}")
             return
         parsed_data = result.get("parsed", {})
         logger.info(f"Parsing completed for file {file_id}, extracted data: {list(parsed_data.keys())}")
@@ -122,7 +121,7 @@ def _run_parse_and_store(file_id: str) -> None:
             logger.info(f"Parsing cancelled for file {file_id} before saving")
             return
             
-        set_status("saving", 60, "Saving parsed data")
+        set_status("saving", "Saving parsed data")
 
         # Summary
         ai_summary = parsed_data.get("summary")
@@ -210,13 +209,13 @@ def _run_parse_and_store(file_id: str) -> None:
 
         db.commit()
 
-        set_status("completed", 100, "Parsing completed")
+        set_status("completed", "Parsing completed")
     except Exception as e:
         try:
             db.rollback()
         except Exception:
             pass
-        set_status("failed", 100, f"Error: {str(e)}")
+        set_status("failed", f"Error: {str(e)}")
     finally:
         try:
             db.close()
@@ -239,7 +238,7 @@ async def cancel_parsing(file_id: str, db: Session = Depends(get_db)):
     if not current_status or current_status in ["completed", "failed", "cancelled"]:
         return {"status": "error", "message": "Cannot cancel: parsing not in progress"}
     
-    _set_status(file_id, "cancelled", 0, "Parsing cancelled by user")
+    _set_status(file_id, "cancelled", "Parsing cancelled by user")
     
     try:
         # Validate UUID format

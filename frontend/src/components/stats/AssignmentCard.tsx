@@ -1,8 +1,8 @@
 'use client'
 
 import { Assignment } from '@/types'
-import { formatDate, formatTime, getDueStatus } from '@/utils/helpers'
-import { Calendar, Clock, MapPin, BookOpen, AlertCircle, Download, CheckCircle } from 'lucide-react'
+import { formatDate, getDueStatus } from '@/utils/helpers'
+import { Calendar, BookOpen, AlertCircle, Download, CheckCircle } from 'lucide-react'
 import clsx from 'clsx'
 
 interface AssignmentCardProps {
@@ -106,17 +106,11 @@ export default function AssignmentCard({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
           <div className="flex items-center space-x-2">
             <Calendar className="w-4 h-4 text-gray-400" />
-            <span className="text-sm text-gray-600">
+            <span className="text-sm text-gray-600 whitespace-nowrap">
               Due: {formatDate(assignment.date)}
             </span>
           </div>
           
-          <div className="flex items-center space-x-2">
-            <Clock className="w-4 h-4 text-gray-400" />
-            <span className="text-sm text-gray-600">
-              {formatTime(assignment.date)}
-            </span>
-          </div>
         </div>
 
         {/* Tags */}

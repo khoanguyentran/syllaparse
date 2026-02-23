@@ -1,9 +1,6 @@
 const publicApiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 export const api = {
-  // Health check
-  health: () => fetch(`${publicApiUrl}/health`),
-  
   // Files - Upload via Next.js API route (which uploads to GCS and calls Python backend)
   uploadFile: (file: File, googleId: string) => {
     const formData = new FormData()
@@ -23,10 +20,10 @@ export const api = {
     return fetch(`${publicApiUrl}/files?${params.toString()}`)
   },
   
-  getFile: (fileId: number) => 
+  getFile: (fileId: string) => 
     fetch(`${publicApiUrl}/files/${fileId}`),
   
-  deleteFile: (fileId: number) => 
+  deleteFile: (fileId: string) => 
     fetch(`${publicApiUrl}/files/${fileId}`, {
       method: 'DELETE'
     }),
@@ -39,110 +36,70 @@ export const api = {
       body: JSON.stringify({ googleUser: userInfo })
     }),
   
-  getUser: (userId: number) => 
-    fetch(`${publicApiUrl}/users/${userId}`),
-  
   getUserByGoogleId: (googleId: string) => 
     fetch(`${publicApiUrl}/users/google/${googleId}`),
   
   // Summaries - Read Only (for frontend display)
-  getSummary: (summaryId: number) => 
-    fetch(`${publicApiUrl}/summaries/${summaryId}`),
-  
-  getSummaryByFile: (fileId: number) => 
+  getSummaryByFile: (fileId: string) => 
     fetch(`${publicApiUrl}/summaries/file/${fileId}?t=${Date.now()}`),
   
   // Assignments - Read Only (for frontend display)
-  getAssignments: (fileId?: number) => {
-    const params = new URLSearchParams()
-    if (fileId) params.append('file_id', fileId.toString())
-    params.append('t', Date.now().toString()) // Cache busting
-    
-    return fetch(`${publicApiUrl}/assignments?${params.toString()}`)
-  },
-  
-  getAssignment: (assignmentId: number) => 
-    fetch(`${publicApiUrl}/assignments/${assignmentId}`),
-  
-  getAssignmentsByFile: (fileId: number) => 
+  getAssignmentsByFile: (fileId: string) => 
     fetch(`${publicApiUrl}/assignments/file/${fileId}?t=${Date.now()}`),
   
   // Exams - Read Only (for frontend display)
-  getExams: (fileId?: number) => {
-    const params = new URLSearchParams()
-    if (fileId) params.append('file_id', fileId.toString())
-    params.append('t', Date.now().toString()) // Cache busting
-    
-    return fetch(`${publicApiUrl}/exams?${params.toString()}`)
-  },
-  
-  getExam: (examId: number) => 
-    fetch(`${publicApiUrl}/exams/${examId}`),
-  
-  getExamsByFile: (fileId: number) => 
+  getExamsByFile: (fileId: string) => 
     fetch(`${publicApiUrl}/exams/file/${fileId}?t=${Date.now()}`),
   
-  getSyllabusData: (fileId: number) => 
-    fetch(`${publicApiUrl}/processing/parse/${fileId}/all?t=${Date.now()}`),
-  
-  getLectures: (fileId?: number, day?: number) => {
-    const params = new URLSearchParams()
-    if (fileId) params.append('file_id', fileId.toString())
-    if (day !== undefined) params.append('day', day.toString())
-    params.append('t', Date.now().toString()) // Cache busting
-    
-    return fetch(`${publicApiUrl}/lectures?${params.toString()}`)
-  },
-  
-  getLecture: (lectureId: number) => 
-    fetch(`${publicApiUrl}/lectures/${lectureId}`),
-  
-  getLecturesByFile: (fileId: number) => 
+  getLecturesByFile: (fileId: string) => 
     fetch(`${publicApiUrl}/lectures/file/${fileId}?t=${Date.now()}`),
   
-  // Users - Essential operations for frontend
-  createUser: (userData: { google_id: string; email: string; name: string }) =>
-    fetch(`${publicApiUrl}/users`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(userData)
-    }),
-  
-  updateUser: (userId: number, userData: { name?: string; email?: string }) =>
-    fetch(`${publicApiUrl}/users/${userId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(userData)
-    }),
-  
   // Processing endpoints
-  parseSyllabus: (fileId: number) => 
-    fetch(`${publicApiUrl}/processing/parse/${fileId}`, {
-      method: 'POST'
-    }),
-  
-  getParsingStatus: (fileId: number) => 
+  getParsingStatus: (fileId: string) => 
     fetch(`${publicApiUrl}/processing/parse/${fileId}/status`),
   
-  cancelParsing: (fileId: number) => 
+  cancelParsing: (fileId: string) => 
     fetch(`${publicApiUrl}/processing/parse/${fileId}/cancel`, {
       method: 'POST'
     }),
   
-  getFileSummary: (fileId: number) => 
-    fetch(`${publicApiUrl}/processing/summary/${fileId}`),
-  
-  getExamDates: (fileId: number) => 
-    fetch(`${publicApiUrl}/processing/exams/${fileId}`),
-  
-  getAssignmentDates: (fileId: number) => 
-    fetch(`${publicApiUrl}/processing/assignments/${fileId}`),
-  
-  getLectureSchedule: (fileId: number) => 
-    fetch(`${publicApiUrl}/processing/lectures/${fileId}`),
-  
-  getGradingBreakdown: (fileId: number) => 
+  getGradingBreakdown: (fileId: string) => 
     fetch(`${publicApiUrl}/processing/grading/${fileId}`),
+  
+  // Google Calendar endpoints
+  storeGoogleToken: (accessToken: string) =>
+    fetch(`${publicApiUrl}/auth/google/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ access_token: accessToken })
+    }),
+  
+  googleLogout: () =>
+    fetch(`${publicApiUrl}/auth/google/logout`, {
+      method: 'POST',
+      credentials: 'include'
+    }),
+  
+  checkCalendarAccess: () =>
+    fetch(`${publicApiUrl}/auth/google/calendar/check`, {
+      credentials: 'include'
+    }),
+  
+  createCalendarEvent: (eventData: {
+    summary: string
+    description?: string
+    start: { dateTime: string; timeZone: string }
+    end: { dateTime: string; timeZone: string }
+    location?: string
+    reminders?: any
+  }) =>
+    fetch(`${publicApiUrl}/auth/google/calendar/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(eventData)
+    }),
 }
 
 export default api

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useState, useEffect } from 'react'
+import React, { useCallback, useState, useEffect, useRef } from 'react'
 import { useGoogleLogin } from '@react-oauth/google'
 import { FcGoogle } from 'react-icons/fc'
 import { api } from '@/utils/api'
@@ -19,57 +19,56 @@ export default function GoogleSignIn({ onGoogleIdChange }: GoogleSignInProps) {
 
   const [imageLoading, setImageLoading] = useState(false)
   const [isInitialized, setIsInitialized] = useState(false)
+  const isValidatingRef = useRef(false)
 
-  // Silently restore session on component mount
   useEffect(() => {
-    const restoreSession = async () => {
-      const session = loadSession()
+    const session = loadSession()    
+    setIsInitialized(true)
+    
+    if (session) {
+      setUser(session.user)
+      setGoogleId(session.googleId)
+      setIsSignedIn(true)
+  
+      onGoogleIdChange(session.googleId)
       
-      if (session) {
-        console.log('Silently restoring session for user:', session.user.name)
-        
-        // Set the user state immediately without showing loading
-        setUser(session.user)
-        setGoogleId(session.googleId)
-        setIsSignedIn(true)
-        
-        // Notify parent component
-        onGoogleIdChange(session.googleId)
-        
-        // Validate session with backend in the background (silently)
-        try {
-          const authResponse = await api.googleLogin(session.user)
-          if (!authResponse.ok) {
-            console.warn('Session validation failed, clearing session')
-            clearSession()
-            setUser(null)
-            setGoogleId(null)
-            setIsSignedIn(false)
-            onGoogleIdChange(null)
+      if (!isValidatingRef.current) {
+        isValidatingRef.current = true
+        const validateSession = async () => {
+          try {
+            const authResponse = await api.googleLogin(session.user)
+            // Only clear session on actual authentication failures (401, 403)
+            // Don't clear on network errors or other issues
+            if (!authResponse.ok) {
+              const status = authResponse.status
+              if (status === 401 || status === 403) {
+                console.warn('Session validation failed with auth error, clearing session')
+                clearSession()
+                setUser(null)
+                setGoogleId(null)
+                setIsSignedIn(false)
+                onGoogleIdChange(null)
+              } else {
+                // Other errors (500, network, etc.) - keep session, just log
+                console.warn('Session validation had non-auth error, keeping session:', status)
+              }
+            }
+          } catch (err) {
+            // Network errors or other exceptions - don't clear session
+            // User stays logged in even if backend is temporarily unavailable
+            console.warn('Session validation error (network/backend issue), keeping session:', err)
+          } finally {
+            isValidatingRef.current = false
           }
-        } catch (err) {
-          console.warn('Session validation error, clearing session:', err)
-          clearSession()
-          setUser(null)
-          setGoogleId(null)
-          setIsSignedIn(false)
-          onGoogleIdChange(null)
         }
+        
+        validateSession()
       }
-      
-      // Mark as initialized (this happens regardless of session state)
-      setIsInitialized(true)
     }
-
-    restoreSession()
   }, [onGoogleIdChange])
 
   const handleTokenResponse = useCallback(async (response: any) => {
     try {
-      // Store the access token for calendar operations
-      localStorage.setItem('google_access_token', response.access_token)
-      
-      // Get user info from Google
       const userInfo = await fetch(
         `https://www.googleapis.com/oauth2/v3/userinfo?access_token=${response.access_token}`
       )
@@ -86,7 +85,6 @@ export default function GoogleSignIn({ onGoogleIdChange }: GoogleSignInProps) {
         email: userData.email,
         picture: userData.picture,
       }
-      
 
       // Validate required fields
       if (!googleUser.id || !googleUser.name || !googleUser.email) {
@@ -98,8 +96,7 @@ export default function GoogleSignIn({ onGoogleIdChange }: GoogleSignInProps) {
         throw new Error('Incomplete user data from Google')
       }
 
-      console.log('Setting user data:', googleUser)
-      console.log('User picture URL:', googleUser.picture)
+      // Update UI immediately - don't wait for backend
       setUser(googleUser)
       setGoogleId(googleUser.id)
       setIsSignedIn(true)
@@ -111,22 +108,15 @@ export default function GoogleSignIn({ onGoogleIdChange }: GoogleSignInProps) {
       // Notify parent component of Google ID change
       onGoogleIdChange(googleUser.id)
 
-      // Call Next.js API route for authentication
-      try {
-        const authResponse = await api.googleLogin(googleUser)
-
-        if (authResponse.ok) {
-          // User authenticated successfully
-        } else {
-          const errorData = await authResponse.json()
-          setError('Failed to authenticate with backend')
-        }
-      } catch (authErr) {
-        setError('Failed to authenticate with backend')
-      }
-
-      // Check calendar access
-      await checkCalendarAccess(response.access_token)
+      // Do backend operations in parallel (non-blocking for UI)
+      Promise.all([
+        api.storeGoogleToken(response.access_token),
+        api.googleLogin(googleUser)
+      ]).catch((err) => {
+        console.error('Backend operations failed:', err)
+        // Don't show error to user since they're already signed in
+        // The UI is already updated, backend sync can happen in background
+      })
     } catch (error) {
       console.error('Error in token response:', error)
       setError('Failed to get user information')
@@ -139,28 +129,8 @@ export default function GoogleSignIn({ onGoogleIdChange }: GoogleSignInProps) {
     scope: 'openid https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events',
   })
 
-  const checkCalendarAccess = async (accessToken: string) => {
-    try {
-      const calendarResponse = await fetch(
-        'https://www.googleapis.com/calendar/v3/calendars/primary',
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        }
-      )
 
-      if (calendarResponse.ok) {
-        // Calendar access granted
-      } else {
-        // Calendar access denied or not requested
-      }
-    } catch (error) {
-      console.error('Error checking calendar access:', error)
-    }
-  }
-
-  const signOut = () => {
+  const signOut = async () => {
     setUser(null)
     setGoogleId(null)
     setIsSignedIn(false)
@@ -171,14 +141,18 @@ export default function GoogleSignIn({ onGoogleIdChange }: GoogleSignInProps) {
     // Clear session from localStorage
     clearSession()
     
-    // Clear access token
-    localStorage.removeItem('google_access_token')
+    // Clear access token cookie via backend
+    try {
+      await api.googleLogout()
+    } catch (err) {
+      console.warn('Failed to clear Google token cookie:', err)
+    }
     
     // Notify parent component that Google ID is cleared
     onGoogleIdChange(null)
   }
 
-  const handleImageError = (e) => {
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
     setImageError(true)
     setImageLoading(false)
   }
@@ -195,19 +169,6 @@ export default function GoogleSignIn({ onGoogleIdChange }: GoogleSignInProps) {
   const retryImageLoad = () => {
     setImageError(false)
     setImageLoading(false)
-  }
-
-  const refreshProfilePicture = async () => {
-    if (!user?.id) return
-    
-    setImageLoading(true)
-    
-    try {
-      setImageLoading(false)
-      alert('To get a fresh profile picture, please sign out and sign in again. Google profile picture URLs expire for security reasons.')
-    } catch (error) {
-      setImageLoading(false)
-    }
   }
 
   const getImageSrc = () => {

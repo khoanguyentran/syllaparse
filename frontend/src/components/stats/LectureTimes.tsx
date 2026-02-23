@@ -225,7 +225,7 @@ export default function LectureTimes({
                               <div className="mt-1 flex items-center space-x-4 text-xs text-gray-500">
                                 <div className="flex items-center space-x-1">
                                   <Calendar className="w-3 h-3" />
-                                  <span>
+                                  <span className="whitespace-nowrap">
                                     {formatDate(lecture.start_date)} - {formatDate(lecture.end_date)}
                                   </span>
                                 </div>

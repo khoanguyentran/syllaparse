@@ -7,14 +7,14 @@ import api from '@/utils/api'
 
 interface SyllabusHistoryProps {
   googleId: string | null
-  onSyllabusSelect: (fileId: string) => void
-  currentFileId?: string
+  onSyllabusSelect: (fileId: string | null) => void
+  activeFileId?: string
 }
 
 export default function SyllabusHistory({ 
   googleId, 
   onSyllabusSelect, 
-  currentFileId 
+  activeFileId 
 }: SyllabusHistoryProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [syllabusFiles, setSyllabusFiles] = useState<SyllabusFile[]>([])
@@ -59,12 +59,10 @@ export default function SyllabusHistory({
         throw new Error('Failed to delete syllabus')
       }
       
-      // Remove from local state
       setSyllabusFiles(prev => prev.filter(file => file.file_id !== fileId))
       
-      // If this was the current syllabus, reset the view
-      if (currentFileId === fileId) {
-        onSyllabusSelect(0) // Reset to no selection
+      if (activeFileId === fileId) {
+        onSyllabusSelect(null)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete syllabus')
@@ -80,8 +78,8 @@ export default function SyllabusHistory({
   }
 
   const getCurrentSyllabusName = () => {
-    if (!currentFileId) return 'Select Syllabus'
-    const currentFile = syllabusFiles.find(file => file.file_id === currentFileId)
+    if (!activeFileId) return 'Select Syllabus'
+    const currentFile = syllabusFiles.find(file => file.file_id === activeFileId)
     return currentFile ? currentFile.filename : 'Select Syllabus'
   }
 
@@ -125,7 +123,7 @@ export default function SyllabusHistory({
                 <div
                   key={file.file_id}
                   className={`px-4 py-3 hover:bg-gray-50 cursor-pointer border-l-4 ${
-                    currentFileId === file.file_id 
+                    activeFileId === file.file_id 
                       ? 'border-l-blue-500 bg-blue-50' 
                       : 'border-l-transparent'
                   }`}
@@ -144,7 +142,7 @@ export default function SyllabusHistory({
                           {file.filename}
                         </p>
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className="text-xs text-gray-500 mt-1 whitespace-nowrap">
                         Uploaded {formatDate(file.upload_date)}
                       </p>
                     </div>

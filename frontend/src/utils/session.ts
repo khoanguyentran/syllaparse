@@ -12,7 +12,7 @@ export interface StoredSession {
 }
 
 const SESSION_KEY = 'syllaparse_google_session'
-const SESSION_EXPIRY_HOURS = 24 // Sessions expire after 24 hours
+const SESSION_EXPIRY_HOURS = 24 
 
 // Check if session is expired
 export const isSessionExpired = (timestamp: number): boolean => {
@@ -64,22 +64,4 @@ export const clearSession = (): void => {
   } catch (err) {
     console.warn('Failed to clear session from localStorage:', err)
   }
-}
-
-// Check if user is currently authenticated
-export const isAuthenticated = (): boolean => {
-  const session = loadSession()
-  return session !== null
-}
-
-// Get current user from session
-export const getCurrentUser = (): GoogleUser | null => {
-  const session = loadSession()
-  return session?.user || null
-}
-
-// Get current Google ID from session
-export const getCurrentGoogleId = (): string | null => {
-  const session = loadSession()
-  return session?.googleId || null
 }
