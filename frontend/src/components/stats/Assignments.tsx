@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { FileText, CheckCircle, Calendar, Clock, BookOpen, ChevronDown, ChevronUp } from 'lucide-react'
 import { Assignment } from '@/types'
 import api from '@/utils/api'
+import { formatDate as formatDateHelper } from '@/utils/helpers'
 
 interface AssignmentsProps {
   fileId: string | null
@@ -51,11 +52,7 @@ export default function Assignments({
   }
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    })
+    return formatDateHelper(dateString, 'MMM d, yyyy')
   }
 
   const formatTime = (timeString: string | null) => {

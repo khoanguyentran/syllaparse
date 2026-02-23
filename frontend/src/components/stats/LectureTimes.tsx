@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Clock, MapPin, Calendar, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react'
 import { Lecture } from '@/types'
 import api from '@/utils/api'
+import { formatDate as formatDateHelper } from '@/utils/helpers'
 
 interface LectureTimesProps {
   fileId: string | null
@@ -79,11 +80,7 @@ export default function LectureTimes({
   }
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    })
+    return formatDateHelper(dateString, 'MMM d, yyyy')
   }
 
   const getDayName = (day: number) => {

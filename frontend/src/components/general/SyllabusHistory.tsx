@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { ChevronDown, History, Trash2, Eye, Calendar } from 'lucide-react'
 import { SyllabusFile } from '@/types'
 import api from '@/utils/api'
+import { formatDate as formatDateHelper } from '@/utils/helpers'
 
 interface SyllabusHistoryProps {
   googleId: string | null
@@ -70,11 +71,7 @@ export default function SyllabusHistory({
   }
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    })
+    return formatDateHelper(dateString, 'MMM d, yyyy')
   }
 
   const getCurrentSyllabusName = () => {

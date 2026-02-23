@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { FileText, CheckCircle, Calendar, Clock, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react'
 import { Exam } from '@/types'
 import api from '@/utils/api'
+import { formatDate as formatDateHelper } from '@/utils/helpers'
 
 interface ExamsProps {
   fileId: string | null
@@ -53,11 +54,7 @@ export default function Exams({
 
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    })
+    return formatDateHelper(dateString, 'MMM d, yyyy')
   }
 
   const formatTime = (timeString: string | null) => {
